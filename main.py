@@ -139,6 +139,7 @@ def main():
         return
     write(OUT, view(mine))
     while True:
+        mine = read(mine_path, mine)   # разбор руками (--week) пишет тот же файл: не отправить неделю второй раз
         try:
             if tick(time.time(), mine, catalog.load_config(STATE_DIR), lambda: journal.load_state(STATE_DIR)):
                 write(mine_path, mine)
