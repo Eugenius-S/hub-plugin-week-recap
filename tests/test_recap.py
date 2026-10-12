@@ -21,7 +21,8 @@ def at(y, mo, d, h=12, mi=0):
     return datetime.datetime(y, mo, d, h, mi, tzinfo=ZONE).timestamp()
 
 
-MON = at(2026, 10, 5, 0)     # неделя 2026-W41: 5.10 0:00 — 12.10 0:00
+MON = at(2026, 10, 5, 0)
+BERLIN_9 = {"id": "p1", "by": "owner", "text": "расписание: пн 09:00 Europe/Berlin", "ts": 0}     # неделя 2026-W41: 5.10 0:00 — 12.10 0:00
 
 
 def ev(seq, ts, type_, entity=None, **data):
@@ -73,6 +74,39 @@ class Week(unittest.TestCase):
         self.assertEqual(recap.due(at(2026, 10, 14, 15), ZONE, {}), "2026-W41")   # хаб лежал в понедельник
         self.assertIsNone(recap.due(at(2026, 10, 12, 9), ZONE, {"2026-W41": {}}))
 
+    def test_due_on_the_chosen_day_and_time(self):
+        when = {"day": 1, "hour": 10, "minute": 30, "zone": None}    # вторник 10:30
+        self.assertIsNone(recap.due(at(2026, 10, 13, 10, 29), ZONE, {}, when))
+        self.assertEqual(recap.due(at(2026, 10, 13, 10, 30), ZONE, {}, when), "2026-W41")
+        self.assertIsNone(recap.due(at(2026, 10, 12, 23), ZONE, {}, when))
+
+
+class Schedule(unittest.TestCase):
+    def test_default_is_monday_nine_in_the_machine_zone(self):
+        self.assertEqual(recap.schedule({}), recap.DEFAULT)
+        self.assertEqual(recap.DEFAULT, {"day": 0, "hour": 9, "minute": 0, "zone": None})
+        self.assertEqual(recap.tz(None).utcoffset(datetime.datetime.now()),
+                         datetime.datetime.now().astimezone().utcoffset())   # местное время машины, не пояс хаба
+
+    def test_the_owners_last_valid_post_sets_it(self):
+        feed = [{"by": "owner", "text": "расписание: вт 10:30"},
+                {"by": "owner", "text": "расписание: пт 25:00"},              # неверное — не берётся
+                {"by": "designer", "text": "расписание: сб 07:00"},          # не владелец — не берётся
+                {"by": "owner", "text": "просто заметка"}]
+        self.assertEqual(recap.schedule({"feeds": {"week-recap": feed}}), {"day": 1, "hour": 10, "minute": 30, "zone": None})
+        feed.append({"by": "owner", "text": "расписание: ср 08:05 Asia/Bangkok"})
+        self.assertEqual(recap.schedule({"feeds": {"week-recap": feed}})["zone"], "Asia/Bangkok")
+        feed.append({"by": "owner", "text": "расписание: ср 08:05 Nowhere/City"})   # неизвестный пояс — не берётся
+        self.assertEqual(recap.schedule({"feeds": {"week-recap": feed}})["zone"], "Asia/Bangkok")
+
+    def test_hub_session_may_set_it_for_the_owner(self):
+        st = {"sessions": {"hub-core": {"kind": "hub"}}, "feeds": {"week-recap": [{"by": "hub-core", "text": "расписание: чт 18:00"}]}}
+        self.assertEqual(recap.schedule(st)["day"], 3)
+
+    def test_describe(self):
+        self.assertEqual(recap.describe(recap.DEFAULT), "пн 09:00, местное время")
+        self.assertEqual(recap.describe({"day": 2, "hour": 8, "minute": 5, "zone": "Asia/Bangkok"}), "ср 08:05, Asia/Bangkok")
+
     def test_events_of_the_week_once_from_overlapping_journals(self):
         d = journal_dir([WEEK[:8], WEEK[5:12], WEEK[10:]])
         got = recap.events(recap.journals(d), MON, at(2026, 10, 12, 0))
@@ -111,13 +145,15 @@ class Flow(unittest.TestCase):
         self.sent, self.mine = [], {"weeks": {}}
         self.send = lambda *a: self.sent.append(a)
 
-    def tick(self, now, sessions):
-        return main.tick(now, self.mine, {"timezone": "Europe/Berlin"}, lambda: {"sessions": sessions}, self.send,
+    def tick(self, now, sessions, feed=(BERLIN_9,)):
+        return main.tick(now, self.mine, {"sessions": sessions, "feeds": {"week-recap": list(feed)}}, self.send,
                          self.state, self.home)
 
     def test_monday_goes_to_analyst_then_the_recap_to_the_owner_once(self):
         fleet = {"analyst": {"role": "agent", "state": "idle"}, "hub-core": {"kind": "hub", "state": "idle"}}
-        self.assertFalse(self.tick(at(2026, 10, 12, 8), fleet))
+        self.tick(at(2026, 10, 12, 8), fleet)                            # расписание запомнено, до 9:00 — ничего
+        self.assertEqual(self.sent, [])
+        self.assertFalse(self.tick(at(2026, 10, 12, 8, 30), fleet))
         self.assertTrue(self.tick(at(2026, 10, 12, 9), fleet))
         (kind, _, data), = self.sent
         week = self.mine["weeks"]["2026-W41"]
@@ -137,6 +173,7 @@ class Flow(unittest.TestCase):
         self.assertIn("TL;DR: неделя ок", data["text"])
         self.assertFalse(self.tick(at(2026, 10, 12, 18), fleet))
         self.assertEqual(len(self.sent), 2)
+        self.assertEqual(main.view(self.mine)["schedule"], "пн 09:00, Europe/Berlin")
         self.assertEqual(main.view(self.mine)["weeks"][0]["text"][:6], "TL;DR:")
 
     def test_no_analyst_goes_to_the_hub(self):

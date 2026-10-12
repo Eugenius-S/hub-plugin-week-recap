@@ -66,14 +66,49 @@ function week(w) {
   return card;
 }
 
+// когда разбирать: пост владельца «расписание: пн 09:00 [пояс]» в канал плагина — процесс берёт последний верный
+const DAYS = ["пн", "вт", "ср", "чт", "пт", "сб", "вс"];
+let editing = false, saved = "";
+
+function when() {
+  const w = data?.when || { day: 0, hour: 9, minute: 0, zone: null };
+  const row = hub.el("div", "wr-when");
+  if (!editing) {
+    const edit = hub.el("button", "wr-link", "Изменить");
+    edit.onclick = () => { editing = true; saved = ""; paint(); };
+    row.append(hub.el("span", "wr-muted", `Разбор: ${data?.schedule || "пн 09:00, местное время"}`), edit);
+    if (saved) row.append(hub.el("span", "wr-muted", saved));
+    return row;
+  }
+  const day = hub.el("select");
+  DAYS.forEach((d, i) => { const o = hub.el("option", null, d); o.value = d; o.selected = i === w.day; day.append(o); });
+  const time = hub.el("input");
+  time.type = "time";
+  time.value = `${String(w.hour).padStart(2, "0")}:${String(w.minute).padStart(2, "0")}`;
+  const zone = hub.el("input", "wr-zone");
+  zone.placeholder = "пояс: местное время";
+  zone.value = w.zone || "";
+  const save = hub.el("button", "wr-link", "Сохранить"), cancel = hub.el("button", "wr-link", "Отмена");
+  cancel.onclick = () => { editing = false; paint(); };
+  save.onclick = async () => {
+    const z = zone.value.trim();
+    await hub.postFeed(`расписание: ${day.value} ${time.value}${z ? " " + z : ""}`);
+    editing = false;
+    saved = "сохранено — применится в течение минуты";
+    paint();
+  };
+  row.append(hub.el("span", "wr-muted", "Разбор:"), day, time, zone, save, cancel);
+  return row;
+}
+
 function paint() {
   if (!box) return;
   const weeks = data?.weeks || [];
   if (open === null && weeks[0]) open = weeks[0].label;
   box.replaceChildren(
-    hub.el("h2", "wr-title", "Неделя"),
+    hub.el("h2", "wr-title", "Неделя"), when(),
     weeks.length ? hub.el("div", "wr-list") : hub.el("p", "wr-muted",
-      "Первый разбор — в понедельник в 9:00: сводка прошлой недели уйдёт analyst (нет его — хабу), итог придёт сюда и в Telegram."));
+      "Первый разбор — по расписанию выше: сводка прошлой недели уйдёт analyst (нет его — хабу), итог придёт сюда и в Telegram."));
   if (weeks.length) box.lastChild.append(...weeks.map(week));
 }
 

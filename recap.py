@@ -3,20 +3,58 @@ import datetime
 import glob
 import json
 import os
+import re
 import statistics
 import zoneinfo
 
-RUN_HOUR = 9               # понедельник, 9:00 по часовому поясу хаба
 OWNER_CHANNELS = ("web", "telegram", "cli")
 FORM = "AskUserQuestion"
 CUT = 400                  # сколько знаков текста брать в сводку для разбора
 
 
-def tz(name):
+DAYS = ("пн", "вт", "ср", "чт", "пт", "сб", "вс")
+DEFAULT = {"day": 0, "hour": 9, "minute": 0, "zone": None}   # понедельник 9:00, местное время машины
+SET = re.compile(r"^\s*расписание:\s*(пн|вт|ср|чт|пт|сб|вс)\s+(\d{1,2}):(\d{2})(?:\s+(\S+))?\s*$", re.I)
+
+
+def local_zone():
+    """Пояс машины: по ссылке /etc/localtime (с переходом на летнее время); нет её (Windows) — нынешнее смещение."""
+    path = os.path.realpath("/etc/localtime")
+    if "zoneinfo/" in path:
+        try:
+            return zoneinfo.ZoneInfo(path.split("zoneinfo/", 1)[1])
+        except (zoneinfo.ZoneInfoNotFoundError, ValueError):
+            pass
+    return datetime.datetime.now().astimezone().tzinfo
+
+
+def known(name):
     try:
-        return zoneinfo.ZoneInfo(name or "UTC")
+        zoneinfo.ZoneInfo(name)
+        return True
     except (zoneinfo.ZoneInfoNotFoundError, ValueError):
-        return zoneinfo.ZoneInfo("UTC")
+        return False
+
+
+def tz(name):
+    return zoneinfo.ZoneInfo(name) if name and known(name) else local_zone()
+
+
+def schedule(state):
+    """Когда разбирать: последний верный пост «расписание: пн 09:00 [пояс]» в канале плагина от владельца или хаба."""
+    hubs = {n for n, s in ((state or {}).get("sessions") or {}).items() if s.get("kind") == "hub"}
+    for post in reversed(((state or {}).get("feeds") or {}).get("week-recap") or []):
+        m = SET.match(str(post.get("text") or ""))
+        if not m or (post.get("by") != "owner" and post.get("by") not in hubs):
+            continue
+        day, hour, minute, zone = DAYS.index(m[1].lower()), int(m[2]), int(m[3]), m[4]
+        if hour < 24 and minute < 60 and (not zone or known(zone)):
+            return {"day": day, "hour": hour, "minute": minute, "zone": zone}
+    return dict(DEFAULT)
+
+
+def describe(when):
+    return f"{DAYS[when['day']]} {when['hour']:02d}:{when['minute']:02d}, {when['zone'] or 'местное время'}"
 
 
 def last_week(now, zone):
@@ -35,11 +73,12 @@ def week_of(label, zone):
     return start.timestamp(), (start + datetime.timedelta(days=7)).timestamp(), label
 
 
-def due(now, zone, done):
-    """Пора разбирать прошлую неделю: наступил понедельник RUN_HOUR и её ещё не разбирали. Хаб лежал в 9:00 — разберём
-    при первом такте после. Метка недели — или None."""
+def due(now, zone, done, when=DEFAULT):
+    """Пора разбирать прошлую неделю: на этой неделе наступили день и время из расписания, а её ещё не разбирали. Хаб
+    лежал в это время — разберём при первом такте после. Метка недели — или None."""
     local = datetime.datetime.fromtimestamp(now, zone)
-    if local.weekday() == 0 and local.hour < RUN_HOUR:
+    monday = (local - datetime.timedelta(days=local.weekday())).replace(hour=0, minute=0, second=0, microsecond=0)
+    if local < monday + datetime.timedelta(days=when["day"], hours=when["hour"], minutes=when["minute"]):
         return None
     label = last_week(now, zone)[2]
     return None if label in done else label

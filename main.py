@@ -1,4 +1,5 @@
-"""Процесс плагина «Неделя»: в понедельник в 9:00 собирает из журнала хаба сводку прошлой недели и отдаёт её на разбор
+"""Процесс плагина «Неделя»: раз в неделю (по умолчанию понедельник 9:00 по местному времени машины; меняется постом
+владельца «расписание: вт 10:30 [пояс]» в канале плагина — из вкладки «Неделя») собирает из журнала хаба сводку прошлой недели и отдаёт её на разбор
 (analyst, нет его — хабу); разбор пришёл — шлёт владельцу (Telegram, страница) и показывает во вкладке «Неделя».
 Журнал только читает; пишет — фактами в ящик ядра. Своё — в <состояние хаба>/week-recap/.
 
@@ -108,16 +109,19 @@ def view(mine):
     return {"weeks": [{"label": k, "start": w["start"], "end": w["end"], "numbers": w["numbers"], "to": w.get("to"),
                        "sent": w.get("sent"), "notified": w.get("notified"), "text": w.get("text"),
                        "recap": w["recap"], "digest": w["digest"]} for k, w in weeks],
-            "names": recap.NAMES}
+            "names": recap.NAMES, "schedule": recap.describe(mine.get("schedule") or recap.DEFAULT),
+            "when": mine.get("schedule") or recap.DEFAULT}
 
 
-def tick(now, mine, cfg, state_fn, send=put, state_dir=STATE_DIR, home=HOME):
+def tick(now, mine, state, send=put, state_dir=STATE_DIR, home=HOME):
     """Один такт: True — своё состояние поменялось (записать и обновить вид)."""
-    zone = recap.tz(cfg.get("timezone"))
-    label = recap.due(now, zone, mine["weeks"])
-    changed = False
+    when = recap.schedule(state)
+    changed = mine.get("schedule") != when
+    mine["schedule"] = when
+    zone = recap.tz(when["zone"])
+    label = recap.due(now, zone, mine["weeks"], when)
     if label:
-        start(label, zone, now, mine, state_fn(), send, state_dir, home)
+        start(label, zone, now, mine, state, send, state_dir, home)
         changed = True
     return finish(now, mine, send) or changed
 
@@ -127,7 +131,7 @@ def main():
     mine = read(mine_path, {"weeks": {}})
     if "--week" in sys.argv:
         label = sys.argv[sys.argv.index("--week") + 1]
-        zone = recap.tz(catalog.load_config(STATE_DIR).get("timezone"))
+        zone = recap.tz((mine.get("schedule") or recap.DEFAULT)["zone"])
         if "--dry" in sys.argv:
             week, path = collect(label, zone)
             print(numbers_text(week["numbers"]) + f"\n\nСводка: {path}")
@@ -141,7 +145,7 @@ def main():
     while True:
         mine = read(mine_path, mine)   # разбор руками (--week) пишет тот же файл: не отправить неделю второй раз
         try:
-            if tick(time.time(), mine, catalog.load_config(STATE_DIR), lambda: journal.load_state(STATE_DIR)):
+            if tick(time.time(), mine, journal.load_state(STATE_DIR)):
                 write(mine_path, mine)
                 write(OUT, view(mine))
         except Exception as e:   # noqa: BLE001 — сбой такта не роняет процесс; хаб поднимет упавший, но зря
