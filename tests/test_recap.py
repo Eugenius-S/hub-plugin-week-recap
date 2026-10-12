@@ -125,6 +125,7 @@ class Flow(unittest.TestCase):
         self.assertIn(week["digest"], data["text"])
         self.assertIn(week["recap"], data["text"])
         self.assertIn("atlassian", data["text"])
+        self.assertIn("вся работа владельца с хабом", data["text"])   # не одна область разбирающего
         self.assertTrue(os.path.getsize(week["digest"]))
         self.assertFalse(self.tick(at(2026, 10, 12, 9, 1), fleet))       # второй раз не шлёт
         with open(week["recap"], "w") as f:
