@@ -27,8 +27,19 @@ function inline(text) {
 
 function prose(text) {
   const root = hub.el("div", "wr-text");
-  let list = null;
+  let list = null, table = null;
   for (const line of text.split("\n")) {
+    if (/^\s*\|.*\|\s*$/.test(line)) {   // таблица: строки «| a | b |», строка «|---|» — разделитель шапки
+      const cells = line.trim().slice(1, -1).split("|").map((c) => c.trim());
+      if (cells.every((c) => /^:?-{2,}:?$/.test(c))) continue;
+      const head = !table;
+      if (!table) root.append(table = hub.el("table", "wr-table"));
+      const tr = hub.el("tr");
+      for (const c of cells) { const td = hub.el(head ? "th" : "td"); td.append(inline(c)); tr.append(td); }
+      table.append(tr);
+      continue;
+    }
+    table = null;
     const h = line.match(/^(#{1,4})\s+(.*)/), li = line.match(/^\s*(?:[-*]|\d+\.)\s+(.*)/);
     if (li) {
       if (!list) root.append(list = hub.el("ul"));
