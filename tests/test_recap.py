@@ -9,7 +9,8 @@ import zoneinfo
 
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, HERE)
-os.environ.setdefault("HUB_STATE_DIR", tempfile.mkdtemp(prefix="wr-state-"))
+# всегда своя папка: в сессии хаба HUB_STATE_DIR — живой хаб, тест затёр бы его сводку (12.10, digest W41)
+os.environ["HUB_STATE_DIR"] = tempfile.mkdtemp(prefix="wr-state-")
 
 import main   # noqa: E402
 import recap  # noqa: E402
@@ -60,6 +61,11 @@ def journal_dir(parts):
         with open(os.path.join(d, name), "w") as f:
             f.write("".join(json.dumps(e) + "\n" for e in part))
     return d
+
+
+class Isolation(unittest.TestCase):
+    def test_tests_never_touch_the_live_hub(self):
+        self.assertTrue(main.HOME.startswith(tempfile.gettempdir()), main.HOME)
 
 
 class Week(unittest.TestCase):
