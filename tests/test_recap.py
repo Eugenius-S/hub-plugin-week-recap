@@ -260,6 +260,27 @@ class Work(unittest.TestCase):
         self.assertFalse(work["m10"]["faded"])
         self.assertEqual((work["s:gen"]["tokens"], work["s:gen"]["owner_msgs"]), (5, 0))   # слова владельца — не в своё                          # одно слово — не активное обсуждение
 
+    def test_a_tool_built_for_a_topic_counts_to_that_topic(self):
+        """Владелец 14.10: «то, что потребовалось для создания промт инженеров, скрипта для mj — к генеративным стилям;
+        да, это хаб, но нет, это задачи конкретные»: задача сессии хаба, которую поставила рабочая сессия, — к её теме."""
+        evs = [ev(1, at(2026, 10, 6, 9), "delegation.created", session="hub-dev", context="mj-скрипт: апскейл 2048",
+                  **{"for": None, "for_session": "gen"}),
+               ev(2, at(2026, 10, 6, 9, 30), "turn.result", "hub-dev", tokens_in=900, tokens_out=0),
+               ev(3, at(2026, 10, 6, 9, 31), "delegation.done", "d1"),
+               ev(4, at(2026, 10, 6, 10), "delegation.created", session="hub-dev", context="ядро: сторож",
+                  **{"for": "m0", "for_session": None})]
+        where = {"gen": "Генеративные стили", "hub-dev": "hub-dev"}
+        work = {x["id"]: x for x in recap.items(evs, at(2026, 10, 12, 0), {}, where)}
+        self.assertEqual(work["d1"]["where"], "Генеративные стили")
+        self.assertEqual(work["d4"]["where"], "hub-dev")                    # просьба владельца — по сессии
+        theirs = recap._theirs(evs[0], "Win")
+        self.assertEqual(theirs["data"]["for_session"], "gen@Win")          # другой хаб — его сессия
+
+    def test_the_prompt_splits_hub_setup_by_topic(self):
+        text = recap.prompt("2026-W41", "5–9 октября", "/d.md", "/w.md", "/draft.json", "/sample.json")
+        self.assertIn("аниматор", text)
+        self.assertIn("к теме", text)
+
     def test_every_project_is_in_the_work_digest_even_a_small_one(self):
         """14.10: из 118 строк недели первые 60 по токенам — почти одна работа над хабом; реклама ушла в «остальное»."""
         work = [{"id": f"m{i}", "kind": "обсуждение", "session": "dev", "where": "Хаб", "topic": f"правка {i}",

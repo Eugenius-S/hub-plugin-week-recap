@@ -128,7 +128,7 @@ def _theirs(e, host):
     """Событие другого хаба — с его метками: seq, сессии, задачи и формы не путаются со своими (analyst есть у обоих)."""
     d, ent = dict(e.get("data") or {}), e.get("entity")
     at = lambda x: x and f"{x}@{host}"   # noqa: E731
-    for k in ("to", "session"):
+    for k in ("to", "session", "for_session"):
         if d.get(k):
             d[k] = at(d[k])
     if d.get("for"):
@@ -297,6 +297,10 @@ def prompt(label, period, digest_path, work_path, draft_path, sample_path):
         "1. Что сделано, что в работе, что брошено: склей обсуждения и задачи в его человеческие задачи (одна цель — "
         "одна задача). Каждый проект из work.md (раздел ##) — в отчёте, хоть строкой; крупные — по задачам. Обсуждение «стихло» — реши по смыслу: сделано (результат был) или брошено. С первого раза или "
         "с правками. Токены задачи — сумма её строк.\n"
+        "Хаб — только работа над самим хабом (страница, Telegram, ядро, обмен двух компьютеров). Создание и настройка "
+        "агента, скилла, скрипта или плагина под конкретную тему — к теме, которой он служит, и его токены тоже: "
+        "аниматор — к анимации, промт-инженер и скрипт Midjourney — к генеративным стилям (владелец 14.10: «да, это хаб, "
+        "но нет, это задачи конкретные»). Доли тем в TL;DR и в токенах — после такой разноски.\n"
         "2. Jira (MCP atlassian), Granola (MCP granola), Teams (MCP ms365) — только чтение: что закрыто за неделю, о "
         "чём договорились на встречах, что просили в Teams. Нет доступа к чему-то — "
         "`hub tools request <id> \"недельный рекап\"` и строка в together.slow, что источник не вошёл.\n"
@@ -377,7 +381,11 @@ def items(evs, end, spent=None, where=None):
             th["last"] = ts
         elif t == "delegation.created" and d.get("session"):
             s = d["session"]
-            task = {"id": f"d{e['seq']}", "kind": "задача", "session": s, "where": where.get(s) or s,
+            # задачу поставила рабочая сессия (направление попросило скрипт, агента) — токены её теме, не хабу
+            # (владелец 14.10: «да, это хаб, но нет, это задачи конкретные»)
+            by = d.get("for_session")
+            task = {"id": f"d{e['seq']}", "kind": "задача", "session": s,
+                    "where": (where.get(by) or by) if by else (where.get(s) or s),
                     "topic": str(d.get("context") or ""), "first": ts, "last": ts, "owner_msgs": 0,
                     "tokens": 0, "usd": 0.0, "turns": 0, "done": None, "for": d.get("for")}
             open_tasks.setdefault(s, []).append(task)
