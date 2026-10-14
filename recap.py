@@ -14,7 +14,8 @@ CUT = 400                  # сколько знаков текста брать
 
 DAYS = ("пн", "вт", "ср", "чт", "пт", "сб", "вс")
 DEFAULT = {"day": 0, "hour": 9, "minute": 0, "zone": None}   # понедельник 9:00, местное время машины
-SET = re.compile(r"^\s*расписание:\s*(пн|вт|ср|чт|пт|сб|вс)\s+(\d{1,2}):(\d{2})(?:\s+(\S+))?\s*$", re.I)
+# «расписание: пн старт» — при первом запуске хаба в этот день (владелец 14.10: «при первом запуске хаба или в 9:00»)
+SET = re.compile(r"^\s*расписание:\s*(пн|вт|ср|чт|пт|сб|вс)\s+(?:(\d{1,2}):(\d{2})|(старт))(?:\s+(\S+))?\s*$", re.I)
 
 
 def local_zone():
@@ -47,14 +48,16 @@ def schedule(state):
         m = SET.match(str(post.get("text") or ""))
         if not m or (post.get("by") != "owner" and post.get("by") not in hubs):
             continue
-        day, hour, minute, zone = DAYS.index(m[1].lower()), int(m[2]), int(m[3]), m[4]
+        day, zone = DAYS.index(m[1].lower()), m[5]
+        hour, minute = (0, 0) if m[4] else (int(m[2]), int(m[3]))
         if hour < 24 and minute < 60 and (not zone or known(zone)):
-            return {"day": day, "hour": hour, "minute": minute, "zone": zone}
+            return {"day": day, "hour": hour, "minute": minute, "zone": zone, **({"start": True} if m[4] else {})}
     return dict(DEFAULT)
 
 
 def describe(when):
-    return f"{DAYS[when['day']]} {when['hour']:02d}:{when['minute']:02d}, {when['zone'] or 'местное время'}"
+    at = "при первом запуске хаба" if when.get("start") else f"{when['hour']:02d}:{when['minute']:02d}"
+    return f"{DAYS[when['day']]} {at}, {when['zone'] or 'местное время'}"
 
 
 def last_week(now, zone):
@@ -73,12 +76,17 @@ def week_of(label, zone):
     return start.timestamp(), (start + datetime.timedelta(days=7)).timestamp(), label
 
 
-def due(now, zone, done, when=DEFAULT):
+def due(now, zone, done, when=DEFAULT, started=None):
     """Пора разбирать прошлую неделю: на этой неделе наступили день и время из расписания, а её ещё не разбирали. Хаб
-    лежал в это время — разберём при первом такте после. Метка недели — или None."""
+    лежал в это время — разберём при первом такте после. «Старт» — хаб запустили в этот день или позже (started —
+    когда поднялся процесс); хаб не выключали — в 9:00. Метка недели — или None."""
     local = datetime.datetime.fromtimestamp(now, zone)
     monday = (local - datetime.timedelta(days=local.weekday())).replace(hour=0, minute=0, second=0, microsecond=0)
-    if local < monday + datetime.timedelta(days=when["day"], hours=when["hour"], minutes=when["minute"]):
+    day = monday + datetime.timedelta(days=when["day"])
+    if when.get("start"):
+        if local < day or (local < day + datetime.timedelta(hours=9) and (started or 0) < day.timestamp()):
+            return None
+    elif local < day + datetime.timedelta(hours=when["hour"], minutes=when["minute"]):
         return None
     label = last_week(now, zone)[2]
     return None if label in done else label
@@ -221,24 +229,58 @@ def digest(label, start, end, m, zone):
     return "\n".join(lines) + "\n"
 
 
-def prompt(label, digest_path, recap_path):
-    """Поручение тому, кто разбирает неделю (analyst, нет его — хаб)."""
+HUMAN = ("Пиши для человека, не для системы: простыми словами, как коллега рассказывает итоги недели. Его задачи и "
+         "результаты (иллюстрации, реклама, тексты, встречи), а не устройство хаба: никаких коммитов, веток, тестов, "
+         "сессий, перезапусков, id вида mN/dN/qN, путей и названий моделей. Работа над самим хабом — одной строкой "
+         "«хаб: что стало удобнее», если владелец сам её просил. Цифры — круглые и понятные.")
+
+
+def prompt(label, period, digest_path, work_path, draft_path, sample_path):
+    """Поручение тому, кто разбирает неделю (analyst, нет его — хаб): черновик рекапа и туду в JSON по образцу."""
     return (
-        f"[week-recap] Недельный разбор {label} для владельца. Сводка из журнала хаба: `{digest_path}`. "
-        f"Запиши разбор в `{recap_path}` — плагин сам отправит его владельцу; итог хода — одна строка «готово». "
-        "Рамка — вся работа владельца с хабом за неделю: все проекты, агенты и сессии из сводки, не только твоя область.\n"
-        "1. Задачи владельца: склей его сообщения, задачи dN и шаги агентов в его человеческие задачи (одна цель "
-        "владельца — одна задача, не ход агента). По каждой: что, где (проект, агент), итог — сделано, в работе, "
-        "брошено; с первого раза или с переделками (владелец вернул результат: «не то», «опять», правки).\n"
-        "2. Jira: задачи, закрытые за эту неделю, — через MCP atlassian, только чтение; нет доступа — "
-        "`hub tools request atlassian \"недельный разбор\"`, а в разборе одна строка, что Jira не вошла. Сопоставь их "
-        "с задачами из п. 1.\n"
-        "3. Эффективность связки владелец + хаб: доля задач с первого раза; сколько ушло времени владельца "
-        "(сообщения, формы, переделки); сколько он ждал результат; где сессии стояли, ожидая его.\n"
-        "4. Рекомендации, 3–5, конкретные и проверяемые: каких агентов или субагентов завести, какие инструменты "
-        "(скиллы, MCP) поставить, в каком формате давать указания — каждая с примером из этой недели.\n"
-        "Формат: первый абзац — TL;DR в 2–3 строки, дальше разделы «Задачи», «Jira», «Эффективность», "
-        "«Рекомендации». Коротко, без служебного; файлы — полным путём.")
+        f"[week-recap] Недельный рекап {label} ({period}) для владельца. Материал из журнала хаба: работа недели с "
+        f"токенами — `{work_path}`, слова владельца, задачи и вопросы по времени — `{digest_path}`. Рамка — вся его "
+        "работа за неделю, не только твоя область.\n"
+        "1. Что сделано, что в работе, что брошено: склей обсуждения и задачи в его человеческие задачи (одна цель — "
+        "одна задача). Обсуждение «стихло» — реши по смыслу: сделано (результат был) или брошено. С первого раза или "
+        "с правками. Токены задачи — сумма её строк.\n"
+        "2. Jira (MCP atlassian), Granola (MCP granola), Teams (MCP ms365) — только чтение: что закрыто за неделю, о "
+        "чём договорились на встречах, что просили в Teams. Нет доступа к чему-то — "
+        "`hub tools request <id> \"недельный рекап\"` и строка в together.slow, что источник не вошёл.\n"
+        "3. Как работали вместе: где связка шла легко и где тормозила (нечёткие вводные, переделки, ожидание "
+        "владельца) — на примерах недели. 3–5 советов: как давать вводные лучше, с примером из недели и как попробовать.\n"
+        "4. Туду на эту неделю: заведённое (Jira — открытые на нём, Teams — ждут его ответа) и незаведённое (договорились "
+        "на встрече в Granola или в чате, а задачи нет).\n"
+        f"{HUMAN}\n"
+        f"Итог — файл `{draft_path}`: JSON по образцу `{sample_path}` (те же ключи; пустой раздел — пустой список). "
+        "numbers — 4 плитки: задач сделано, с первого раза, часы работы агентов, токены. Итог хода — одна строка «готово».")
+
+
+def writer_prompt(label, draft_path, final_path):
+    """Поручение райтеру: тексты черновика — по-человечески, в тот же JSON."""
+    return (
+        f"[week-recap] Недельный рекап {label} для владельца: перепиши тексты черновика `{draft_path}` так, чтобы его "
+        "было приятно и быстро читать (владелец 14.10: «максимально хуманизированным, не машинным»). Смысл, факты и "
+        "цифры не меняй; структуру JSON и ключи — тоже; ссылки и источники оставь как есть. Убери служебное и "
+        f"техническое, что ему не нужно. {HUMAN}\n"
+        f"Итог — файл `{final_path}`, тот же JSON. Итог хода — одна строка «готово».")
+
+
+def render(template, data):
+    """Отчёт: шаблон дизайнера с данными недели в блоке recap-data (больше в шаблоне ничего не меняется)."""
+    blob = json.dumps(data, ensure_ascii=False, indent=1).replace("</", "<\\/")
+    m = re.search(r'(<script id="recap-data" type="application/json">)(.*?)(</script>)', template, re.S)
+    if not m:
+        raise ValueError("в шаблоне нет блока recap-data")
+    return template[:m.start(2)] + "\n" + blob + "\n" + template[m.end(2):]
+
+
+def valid(data):
+    """Черновик похож на рекап: словарь с TL;DR и разделами-списками."""
+    if not isinstance(data, dict) or not str(data.get("tldr") or "").strip():
+        return False
+    lists = ("numbers", "done", "in_progress", "dropped", "tokens_by_task", "tips")
+    return all(isinstance(data.get(k, []), list) for k in lists) and isinstance(data.get("todo", {}), dict)
 
 
 def reviewer(state):
@@ -248,3 +290,87 @@ def reviewer(state):
     if a.get("state") not in (None, "removed") and a.get("role") == "agent":
         return "analyst"
     return next((n for n, s in sessions.items() if s.get("kind") == "hub" and s.get("state") != "removed"), None)
+
+
+THREAD_GAP = 3 * 3600      # сообщения владельца одной сессии ближе этого — одно обсуждение
+FADED = 24 * 3600          # обсуждение без новых слов владельца дольше этого — стихло (владелец 14.10: «косвенно выполненные»)
+LIVELY = 3                 # столько слов владельца в обсуждении — «активное»
+
+
+def tokens(d):
+    return int(d.get("tokens_in") or 0) + int(d.get("tokens_out") or 0)
+
+
+def items(evs, end, spent=None, where=None):
+    """Работа недели по-человечески: обсуждения владельца с сессией (его сообщения подряд, промежутки меньше
+    THREAD_GAP) и задачи dN. Каждый ход сессии — к задаче, которую она ведёт (последней открытой), иначе к последнему
+    её обсуждению; токены и цена (spent: seq хода → usd) — к ним. Обсуждение, где владелец писал не меньше LIVELY раз и
+    замолчал дольше FADED до конца недели, — «стихло»: по нему решает разбирающий (сделано или брошено)."""
+    spent, where = spent or {}, where or {}
+    out, last_thread, open_tasks = [], {}, {}
+    for e in evs:
+        t, d, ent, ts = e.get("type"), e.get("data") or {}, e.get("entity"), e.get("ts") or 0
+        if t == "message.received" and _owner(d) and d.get("to") and \
+                not str(d.get("text") or "").startswith("Ответ владельца на вопрос"):
+            s = d["to"]
+            th = last_thread.get(s)
+            if not th or ts - th["last"] > THREAD_GAP:
+                th = {"id": f"m{e['seq']}", "kind": "обсуждение", "session": s, "where": where.get(s) or s,
+                      "topic": str(d.get("text") or ""), "first": ts, "last": ts, "owner_msgs": 0,
+                      "tokens": 0, "usd": 0.0, "turns": 0}
+                last_thread[s] = th
+                out.append(th)
+            th["owner_msgs"] += 1
+            th["last"] = ts
+        elif t == "delegation.created" and d.get("session"):
+            s = d["session"]
+            task = {"id": f"d{e['seq']}", "kind": "задача", "session": s, "where": where.get(s) or s,
+                    "topic": str(d.get("context") or ""), "first": ts, "last": ts, "owner_msgs": 0,
+                    "tokens": 0, "usd": 0.0, "turns": 0, "done": None, "for": d.get("for")}
+            open_tasks.setdefault(s, []).append(task)
+            out.append(task)
+        elif t == "delegation.done":
+            for tasks in open_tasks.values():
+                for task in tasks:
+                    if task["id"] == ent:
+                        task["done"] = ts
+                        tasks.remove(task)
+                        break
+        elif t == "turn.result" and ent:
+            box = (open_tasks.get(ent) or [None])[-1] or last_thread.get(ent)
+            if not box:
+                box = last_thread[ent] = {"id": f"s:{ent}", "kind": "своё", "session": ent,
+                                          "where": where.get(ent) or ent, "topic": "", "first": ts, "last": ts,
+                                          "owner_msgs": 0, "tokens": 0, "usd": 0.0, "turns": 0}
+                out.append(box)
+            box["tokens"] += tokens(d)
+            box["usd"] += spent.get(e["seq"], 0.0)
+            box["turns"] += 1
+            box["last"] = max(box["last"], ts)
+    for x in out:
+        x["usd"] = round(x["usd"], 2)
+        if x["kind"] == "обсуждение":
+            x["faded"] = x["owner_msgs"] >= LIVELY and end - x["last"] >= FADED
+    return sorted(out, key=lambda x: -x["tokens"])
+
+
+def human_tokens(n):
+    return f"{n / 1e6:.1f} млн".replace(".", ",") if n >= 1e5 else f"{round(n / 1e3)} тыс"
+
+
+def work_digest(label, start, end, work, zone, top=60):
+    """Сводка работы недели для разбора: что владелец обсуждал и поручал, сколько ушло токенов, что стихло."""
+    total = sum(x["tokens"] for x in work) or 1
+    lines = [f"# Работа недели {label}: {_at(start, zone)} — {_at(end - 1, zone)}", "",
+             f"Всего токенов: {human_tokens(total)}, ≈ ${round(sum(x['usd'] for x in work))} по прайсу API.", "",
+             "Строка: id · что · где · период · слов владельца · ходов · токены (доля) · $ · состояние", ""]
+    for x in work[:top]:
+        state = ("сдана" if x.get("done") else "не сдана") if x["kind"] == "задача" else \
+            ("стихло — реши, сделано или брошено" if x.get("faded") else "") if x["kind"] == "обсуждение" else "без просьбы владельца"
+        lines.append(f"- {x['id']} · {x['kind']}: {_cut(x['topic'], 300) or '—'} · {x['where']} · "
+                     f"{_at(x['first'], zone)} — {_at(x['last'], zone)} · {x['owner_msgs']} · {x['turns']} · "
+                     f"{human_tokens(x['tokens'])} ({round(100 * x['tokens'] / total)}%) · ${x['usd']} · {state}")
+    rest = work[top:]
+    if rest:
+        lines.append(f"- остальное: {len(rest)} шт., {human_tokens(sum(x['tokens'] for x in rest))}")
+    return "\n".join(lines) + "\n"

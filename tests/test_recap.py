@@ -15,6 +15,8 @@ os.environ["HUB_STATE_DIR"] = tempfile.mkdtemp(prefix="wr-state-")
 import main   # noqa: E402
 import recap  # noqa: E402
 
+main.REPORTS = tempfile.mkdtemp(prefix="wr-reports-")   # копии отчётов — не в папку плагина
+
 ZONE = zoneinfo.ZoneInfo("Europe/Berlin")
 
 
@@ -66,6 +68,7 @@ def journal_dir(parts):
 class Isolation(unittest.TestCase):
     def test_tests_never_touch_the_live_hub(self):
         self.assertTrue(main.HOME.startswith(tempfile.gettempdir()), main.HOME)
+        self.assertTrue(main.REPORTS.startswith(tempfile.gettempdir()), main.REPORTS)
 
 
 class Week(unittest.TestCase):
@@ -155,32 +158,64 @@ class Flow(unittest.TestCase):
         return main.tick(now, self.mine, {"sessions": sessions, "feeds": {"week-recap": list(feed)}}, self.send,
                          self.state, self.home)
 
-    def test_monday_goes_to_analyst_then_the_recap_to_the_owner_once(self):
-        fleet = {"analyst": {"role": "agent", "state": "idle"}, "hub-core": {"kind": "hub", "state": "idle"}}
+    def write(self, path, data, ts):
+        with open(path, "w") as f:
+            json.dump(data, f, ensure_ascii=False)
+        os.utime(path, (ts, ts))   # часы теста, не настоящие
+
+    DRAFT = {"tldr": "Неделя: сделали отчёт", "numbers": [{"label": "Задач сделано", "value": "1"}],
+             "done": [{"title": "Отчёт за сентябрь"}], "todo": {"filed": [], "not_filed": []}}
+
+    def test_analyst_drafts_writer_humanizes_owner_gets_the_report_once(self):
+        fleet = {"analyst": {"role": "agent", "state": "idle"}, "writer": {"role": "agent", "state": "idle"},
+                 "hub-core": {"kind": "hub", "state": "idle"}}
         self.tick(at(2026, 10, 12, 8), fleet)                            # расписание запомнено, до 9:00 — ничего
         self.assertEqual(self.sent, [])
-        self.assertFalse(self.tick(at(2026, 10, 12, 8, 30), fleet))
         self.assertTrue(self.tick(at(2026, 10, 12, 9), fleet))
         (kind, _, data), = self.sent
         week = self.mine["weeks"]["2026-W41"]
         self.assertEqual((kind, data["to"], data["sender"]), ("message.received", "analyst", "week-recap"))
-        self.assertIn(week["digest"], data["text"])
-        self.assertIn(week["recap"], data["text"])
-        self.assertIn("atlassian", data["text"])
-        self.assertIn("вся работа владельца с хабом", data["text"])   # не одна область разбирающего
-        self.assertTrue(os.path.getsize(week["digest"]))
+        for part in (week["digest"], week["work"], week["draft"], "atlassian", "granola", "ms365", "коммит"):
+            self.assertIn(part, data["text"])
+        with open(week["work"]) as f:
+            work = f.read()
+        self.assertIn("сделай отчёт", work)                             # обсуждение владельца
+        self.assertIn("задача: отчёт", work)                            # и задача по нему — с токенами
         self.assertFalse(self.tick(at(2026, 10, 12, 9, 1), fleet))       # второй раз не шлёт
-        with open(week["recap"], "w") as f:
-            f.write("TL;DR: неделя ок\n\n## Рекомендации\n- завести агента")
-        os.utime(week["recap"], (at(2026, 10, 12, 9, 30),) * 2)   # часы теста, не настоящие
-        self.assertTrue(self.tick(at(2026, 10, 12, 10), fleet))
+        self.write(week["draft"], {"нет": "tldr"}, at(2026, 10, 12, 9, 20))   # не похоже на рекап — ждём дальше
+        self.assertFalse(self.tick(at(2026, 10, 12, 9, 25), fleet))
+        self.write(week["draft"], self.DRAFT, at(2026, 10, 12, 9, 30))
+        self.assertTrue(self.tick(at(2026, 10, 12, 9, 31), fleet))
         kind, _, data = self.sent[-1]
-        self.assertEqual((kind, data["title"], data["owner"]), ("owner.notify", "Неделя 2026-W41", True))
-        self.assertIn("TL;DR: неделя ок", data["text"])
+        self.assertEqual((kind, data["to"]), ("message.received", "writer"))
+        self.assertIn(week["draft"], data["text"])
+        self.assertIn(week["final"], data["text"])
+        final = dict(self.DRAFT, tldr="Хорошая неделя: отчёт готов")
+        self.write(week["final"], final, at(2026, 10, 12, 10))
+        self.assertTrue(self.tick(at(2026, 10, 12, 10, 1), fleet))
+        kind, _, data = self.sent[-1]
+        self.assertEqual((kind, data["owner"]), ("owner.notify", True))
+        self.assertIn("Хорошая неделя", data["text"])
+        self.assertIn(week["report"], data["text"])
+        with open(week["report"]) as f:
+            html = f.read()
+        self.assertIn("Хорошая неделя: отчёт готов", html)
+        self.assertIn("5–11 октября", html)
         self.assertFalse(self.tick(at(2026, 10, 12, 18), fleet))
-        self.assertEqual(len(self.sent), 2)
-        self.assertEqual(main.view(self.mine)["schedule"], "пн 09:00, Europe/Berlin")
-        self.assertEqual(main.view(self.mine)["weeks"][0]["text"][:6], "TL;DR:")
+        self.assertEqual(len(self.sent), 3)
+        v = main.view(self.mine)
+        self.assertEqual((v["weeks"][0]["stage"], v["weeks"][0]["report"]), ("готов", "web/reports/2026-W41.html"))
+        self.assertEqual(v["weeks"][0]["tiles"][0]["value"], "1")
+
+    def test_silent_writer_the_draft_goes_out(self):
+        fleet = {"analyst": {"role": "agent", "state": "idle"}, "writer": {"role": "agent", "state": "idle"}}
+        self.tick(at(2026, 10, 12, 9), fleet)
+        week = self.mine["weeks"]["2026-W41"]
+        self.write(week["draft"], self.DRAFT, at(2026, 10, 12, 9, 30))
+        self.tick(at(2026, 10, 12, 9, 31), fleet)
+        self.assertFalse(self.tick(at(2026, 10, 12, 12, 30), fleet))
+        self.assertTrue(self.tick(at(2026, 10, 12, 12, 32), fleet))
+        self.assertIn("Неделя: сделали отчёт", self.sent[-1][2]["text"])
 
     def test_no_analyst_goes_to_the_hub(self):
         self.tick(at(2026, 10, 12, 9), {"hub-core": {"kind": "hub", "state": "idle"}})
@@ -194,14 +229,45 @@ class Flow(unittest.TestCase):
         self.assertEqual(data["title"], "Неделя 2026-W41: цифры")
         self.assertIn("сообщений владельца: 1", data["text"])
 
-    def test_old_recap_file_is_not_this_weeks_answer(self):
+    def test_old_draft_is_not_this_weeks_answer(self):
         os.makedirs(os.path.join(self.home, "2026-W41"))
-        path = os.path.join(self.home, "2026-W41", "recap.md")
-        with open(path, "w") as f:
-            f.write("старый разбор")
-        os.utime(path, (at(2026, 10, 1), at(2026, 10, 1)))
+        self.write(os.path.join(self.home, "2026-W41", "draft.json"), self.DRAFT, at(2026, 10, 1))
         self.tick(at(2026, 10, 12, 9), {"analyst": {"role": "agent", "state": "idle"}})
         self.assertFalse(self.tick(at(2026, 10, 12, 9, 1), {}))
+
+
+class Work(unittest.TestCase):
+    def test_tokens_go_to_the_task_or_the_discussion_and_lively_silence_is_faded(self):
+        d = {"channel": "web", "owner": True}
+        evs = [ev(1, at(2026, 10, 5, 10), "message.received", to="gen", text="сделай баннер", **d),
+               ev(2, at(2026, 10, 5, 10, 5), "turn.result", "gen", tokens_in=1000, tokens_out=10),
+               ev(3, at(2026, 10, 5, 11), "message.received", to="gen", text="правки", **d),
+               ev(4, at(2026, 10, 5, 12), "message.received", to="gen", text="ещё", **d),
+               ev(5, at(2026, 10, 5, 12, 5), "turn.result", "gen", tokens_in=500, tokens_out=0),
+               ev(6, at(2026, 10, 6, 9), "delegation.created", session="pe", context="промты", **{"for": "m1"}),
+               ev(7, at(2026, 10, 6, 9, 30), "turn.result", "pe", tokens_in=300, tokens_out=0),
+               ev(8, at(2026, 10, 6, 9, 31), "delegation.done", "d6"),
+               ev(9, at(2026, 10, 6, 9, 40), "turn.result", "pe", tokens_in=7, tokens_out=0),
+               ev(10, at(2026, 10, 9, 10), "message.received", to="gen", text="новое", **d)]
+        work = {x["id"]: x for x in recap.items(evs, at(2026, 10, 12, 0), {2: 1.5}, {"gen": "Генерация"})}
+        m1 = work["m1"]
+        self.assertEqual((m1["owner_msgs"], m1["tokens"], m1["usd"], m1["where"], m1["faded"]),
+                         (3, 1510, 1.5, "Генерация", True))
+        self.assertEqual((work["d6"]["tokens"], bool(work["d6"]["done"])), (300, True))
+        self.assertEqual(work["s:pe"]["tokens"], 7)                     # после сдачи — своё, не задача
+        self.assertFalse(work["m10"]["faded"])                          # одно слово — не активное обсуждение
+
+
+class StartMode(unittest.TestCase):
+    def test_first_start_on_monday_or_nine(self):
+        when = {"day": 0, "hour": 0, "minute": 0, "zone": None, "start": True}
+        self.assertIsNone(recap.due(at(2026, 10, 12, 7), ZONE, {}, when, started=at(2026, 10, 11, 20)))   # хаб с ночи
+        self.assertEqual(recap.due(at(2026, 10, 12, 7), ZONE, {}, when, started=at(2026, 10, 12, 6, 59)), "2026-W41")
+        self.assertEqual(recap.due(at(2026, 10, 12, 9), ZONE, {}, when, started=at(2026, 10, 11, 20)), "2026-W41")
+        self.assertIsNone(recap.due(at(2026, 10, 11, 23), ZONE, {"2026-W40": {}}, when, started=at(2026, 10, 11, 22)))
+        feed = [{"by": "owner", "text": "расписание: пн старт"}]
+        self.assertEqual(recap.schedule({"feeds": {"week-recap": feed}}), when)
+        self.assertEqual(recap.describe(when), "пн при первом запуске хаба, местное время")
 
 
 if __name__ == "__main__":

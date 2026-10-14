@@ -24,3 +24,4 @@
 .wr-table { border-collapse: collapse; width: 100%; margin: var(--space-2, 8px) 0; font-size: var(--text-sm, 14px); }
 .wr-table th, .wr-table td { text-align: left; vertical-align: top; padding: 4px 8px; border-bottom: 1px solid var(--border, #ddd); }
 .wr-table th { color: var(--muted-foreground, #888); font-weight: 500; }
+.wr-tldr { margin: var(--space-2, 8px) 0; line-height: 1.5; }

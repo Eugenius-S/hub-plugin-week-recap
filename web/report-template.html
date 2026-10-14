@@ -1,0 +1,432 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>Неделя</title>
+<style>
+  :root {
+    --bg: oklch(98.2% 0.006 85);
+    --surface: oklch(95.6% 0.009 85);
+    --ink: oklch(24% 0.012 70);
+    --ink-2: oklch(45% 0.012 70);
+    --ink-3: oklch(58% 0.01 70);
+    --line: oklch(89% 0.01 80);
+    --accent: oklch(52% 0.13 255);
+    --good: oklch(50% 0.12 150);
+    --good-bg: oklch(94% 0.04 150);
+    --slow: oklch(55% 0.13 60);
+    --slow-bg: oklch(94.5% 0.045 75);
+    --bar: oklch(52% 0.13 255);
+    --bar-track: oklch(92% 0.012 80);
+
+    --serif: ui-serif, "New York", "Iowan Old Style", Georgia, "Times New Roman", serif;
+    --sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+
+    --s1: 4px; --s2: 8px; --s3: 12px; --s4: 16px; --s5: 24px; --s6: 32px; --s7: 48px; --s8: 64px;
+    --r: 10px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: oklch(19% 0.006 70);
+      --surface: oklch(23.5% 0.008 70);
+      --ink: oklch(93% 0.008 80);
+      --ink-2: oklch(76% 0.01 80);
+      --ink-3: oklch(63% 0.01 80);
+      --line: oklch(31% 0.008 70);
+      --accent: oklch(76% 0.1 255);
+      --good: oklch(78% 0.12 150);
+      --good-bg: oklch(30% 0.05 150);
+      --slow: oklch(80% 0.12 70);
+      --slow-bg: oklch(31% 0.05 70);
+      --bar: oklch(72% 0.11 255);
+      --bar-track: oklch(29% 0.008 70);
+    }
+  }
+
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font: 400 17px/1.55 var(--sans);
+    -webkit-font-smoothing: antialiased;
+  }
+  main {
+    max-width: 680px; margin: 0 auto;
+    padding: var(--s8) var(--s5) var(--s8);
+    padding-left: max(var(--s5), env(safe-area-inset-left));
+    padding-right: max(var(--s5), env(safe-area-inset-right));
+  }
+  [hidden] { display: none !important; }
+
+  .eyebrow { margin: 0 0 var(--s4); color: var(--ink-3); font-size: 14px; letter-spacing: .02em; }
+  .tldr {
+    margin: 0; font: 400 clamp(22px, 4.6vw, 28px)/1.4 var(--serif);
+    letter-spacing: -.005em; text-wrap: pretty;
+  }
+
+  section { margin-top: var(--s8); }
+  h2 {
+    display: flex; align-items: center; gap: var(--s3);
+    margin: 0 0 var(--s5); padding-bottom: var(--s3); border-bottom: 1px solid var(--line);
+    font: 600 20px/1.3 var(--serif); letter-spacing: -.005em;
+  }
+  h2 .count { margin-left: auto; color: var(--ink-3); font: 400 14px/1 var(--sans); font-variant-numeric: tabular-nums; }
+  .ic { width: 24px; height: 24px; flex: none; fill: currentColor; color: var(--ink-2); }
+  .ic.sm { width: 16px; height: 16px; }
+
+  /* цифры */
+  .numbers { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--s5) var(--s4); margin: 0; }
+  .numbers div { min-width: 0; display: flex; flex-direction: column; }
+  .numbers dd { order: -1; }
+  .numbers dd { margin: 0; font: 600 30px/1.1 var(--serif); font-variant-numeric: tabular-nums; letter-spacing: -.01em; }
+  .numbers dt { margin-top: var(--s2); font-size: 15px; line-height: 1.35; }
+  .numbers .hint { display: block; margin-top: 2px; color: var(--ink-3); font-size: 13px; line-height: 1.35; }
+
+  /* списки задач */
+  .items { list-style: none; margin: 0; padding: 0; }
+  .items > li { padding: var(--s4) 0; border-bottom: 1px solid var(--line); }
+  .items > li:first-child { padding-top: 0; }
+  .items > li:last-child { border-bottom: 0; padding-bottom: 0; }
+  .title { margin: 0; font-weight: 600; line-height: 1.4; text-wrap: pretty; }
+  .meta { margin: var(--s1) 0 0; color: var(--ink-3); font-size: 14px; }
+  .meta span + span::before { content: "·"; margin: 0 .5em; }
+  .story { margin: var(--s2) 0 0; color: var(--ink-2); }
+  .row { display: flex; align-items: flex-start; gap: var(--s3); }
+  .row > div { flex: 1; min-width: 0; }
+
+  .tag {
+    display: inline-flex; align-items: center; gap: 6px; flex: none;
+    padding: 3px 10px 3px 8px; border-radius: 999px; font-size: 13px; line-height: 1.4; white-space: nowrap;
+  }
+  .tag.good { background: var(--good-bg); color: var(--good); }
+  .tag .ic { color: inherit; }
+
+  .next { margin: var(--s2) 0 0; color: var(--ink-2); }
+  .next b { color: var(--ink); font-weight: 600; }
+  .dropped .title { color: var(--ink-2); }
+
+  /* токены */
+  .tokens .line { display: flex; justify-content: space-between; gap: var(--s4); align-items: baseline; }
+  .tokens .val { color: var(--ink-2); font-size: 15px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .bar { margin-top: var(--s2); height: 6px; border-radius: 3px; background: var(--bar-track); overflow: hidden; }
+  .bar i { display: block; height: 100%; border-radius: 3px; background: var(--bar); }
+
+  /* как работали вместе */
+  .together { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s5); }
+  .together h3 { display: flex; align-items: center; gap: var(--s2); margin: 0 0 var(--s3); font-size: 15px; font-weight: 600; }
+  .together h3::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--dot); }
+  .together .good { --dot: var(--good); }
+  .together .slow { --dot: var(--slow); }
+  .together ul { margin: 0; padding: 0 0 0 1.1em; color: var(--ink-2); }
+  .together li + li { margin-top: var(--s2); }
+
+  /* советы */
+  .tip { padding: var(--s5); border-radius: var(--r); background: var(--surface); }
+  .tip + .tip { margin-top: var(--s4); }
+  .tip .title { font: 600 19px/1.35 var(--serif); }
+  .tip dl { margin: var(--s4) 0 0; }
+  .tip dd + dt { margin-top: var(--s4); }
+  .tip dt { color: var(--ink-3); font-size: 13px; letter-spacing: .02em; }
+  .tip dd { margin: 2px 0 0; color: var(--ink-2); }
+  .tip dd.try { color: var(--ink); }
+
+  /* туду */
+  .sub { margin: 0 0 var(--s3); color: var(--ink-3); font-size: 14px; }
+  .sub + .items, .items + .sub { margin-top: 0; }
+  .items + .sub { margin-top: var(--s6); }
+  .todo .row { align-items: center; }
+  .check { width: 20px; height: 20px; flex: none; border: 1.5px solid var(--ink-3); border-radius: 6px; align-self: flex-start; margin-top: 2px; }
+  .notfiled .check { border-style: dashed; }
+  .src { color: var(--ink-2); }
+  a.open {
+    display: inline-flex; align-items: center; gap: 4px; color: var(--accent); text-decoration: none;
+    border-radius: 4px;
+  }
+  a.open:hover { text-decoration: underline; text-underline-offset: 3px; }
+  a.open:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .due { color: var(--slow); }
+
+  footer { margin-top: var(--s8); color: var(--ink-3); font-size: 13px; }
+
+  @media (max-width: 600px) {
+    body { font-size: 16px; }
+    main { padding-top: var(--s7); }
+    section { margin-top: var(--s7); }
+    .numbers { grid-template-columns: 1fr 1fr; }
+    .numbers dd { font-size: 26px; }
+    .together { grid-template-columns: 1fr; }
+    .tip { padding: var(--s4); }
+    .done .row { flex-direction: column; gap: var(--s2); }
+  }
+  @media print {
+    body { background: #fff; }
+    .tip { border: 1px solid var(--line); background: none; }
+  }
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <!-- Icons8, Fluent System Regular: checked QPQ8uqS9OEpa, checkmark VfY8rwjNJSAQ, hourglass DwEoJNI6nHDk, circled-pause loCnEON0huJG, coins c6JA9p8Nnzkq, handshake gf7HkPc5t1hF, light-on 57lj558zKJJC, todo-list l5uiDmkegQeP, external-link hUqP035cA2Bd -->
+  <symbol id="i-done" viewBox="0 0 48 48"><path d="M 24 4 C 12.972 4 4 12.972 4 24 C 4 35.028 12.972 44 24 44 C 35.028 44 44 35.028 44 24 C 44 20.791 43.222047 17.767172 41.873047 15.076172 L 39.628906 17.320312 C 40.508906 19.371312 41 21.629 41 24 C 41 33.374 33.374 41 24 41 C 14.626 41 7 33.374 7 24 C 7 14.626 14.626 7 24 7 C 28.446 7 32.485578 8.7292031 35.517578 11.533203 L 37.638672 9.4121094 C 34.061672 6.0651094 29.273 4 24 4 z M 39.470703 10.986328 A 1.50015 1.50015 0 0 0 38.439453 11.439453 L 21.5 28.378906 L 17.560547 24.439453 A 1.50015 1.50015 0 1 0 15.439453 26.560547 L 20.439453 31.560547 A 1.50015 1.50015 0 0 0 22.560547 31.560547 L 40.560547 13.560547 A 1.50015 1.50015 0 0 0 39.470703 10.986328 z"/></symbol>
+  <symbol id="i-check" viewBox="0 0 48 48"><path d="M 43.470703 8.9863281 A 1.50015 1.50015 0 0 0 42.439453 9.4394531 L 16.5 35.378906 L 5.5605469 24.439453 A 1.50015 1.50015 0 1 0 3.4394531 26.560547 L 15.439453 38.560547 A 1.50015 1.50015 0 0 0 17.560547 38.560547 L 44.560547 11.560547 A 1.50015 1.50015 0 0 0 43.470703 8.9863281 z"/></symbol>
+  <symbol id="i-progress" viewBox="0 0 48 48"><path d="M 9.5 6 A 1.50015 1.50015 0 1 0 9.5 9 L 10 9 L 10 11 C 10 16.929898 13.772437 21.88495 19 23.917969 L 19 24.082031 C 13.772437 26.11505 10 31.070102 10 37 L 10 39 L 9.5 39 A 1.50015 1.50015 0 1 0 9.5 42 L 11.5 42 L 36.5 42 L 38.5 42 A 1.50015 1.50015 0 1 0 38.5 39 L 38 39 L 38 37 C 38 31.070102 34.227563 26.11505 29 24.082031 L 29 23.917969 C 34.227563 21.88495 38 16.929898 38 11 L 38 9 L 38.5 9 A 1.50015 1.50015 0 1 0 38.5 6 L 36.5 6 L 11.5 6 L 9.5 6 z M 13 9 L 35 9 L 35 11 C 35 16.018458 31.650951 20.222469 27.080078 21.554688 A 1.50015 1.50015 0 0 0 26 22.994141 L 26 25.005859 A 1.50015 1.50015 0 0 0 27.080078 26.445312 C 31.650951 27.777531 35 31.981542 35 37 L 35 39 L 31.349609 39 C 30.654699 35.57668 27.628336 33 24 33 C 20.371664 33 17.345301 35.57668 16.650391 39 L 13 39 L 13 37 C 13 31.981542 16.349049 27.777531 20.919922 26.445312 A 1.50015 1.50015 0 0 0 22 25.005859 L 22 22.994141 A 1.50015 1.50015 0 0 0 20.919922 21.554688 C 16.349049 20.222469 13 16.018458 13 11 L 13 9 z M 20 16 C 20 18.209 21.791 20 24 20 C 26.209 20 28 18.209 28 16 L 20 16 z"/></symbol>
+  <symbol id="i-dropped" viewBox="0 0 48 48"><path d="M 24 4 C 12.972292 4 4 12.972292 4 24 C 4 35.027708 12.972292 44 24 44 C 35.027708 44 44 35.027708 44 24 C 44 12.972292 35.027708 4 24 4 z M 24 7 C 33.406292 7 41 14.593708 41 24 C 41 33.406292 33.406292 41 24 41 C 14.593708 41 7 33.406292 7 24 C 7 14.593708 14.593708 7 24 7 z M 19 16 C 17.895 16 17 16.895 17 18 L 17 30 C 17 31.105 17.895 32 19 32 C 20.105 32 21 31.105 21 30 L 21 18 C 21 16.895 20.105 16 19 16 z M 29 16 C 27.895 16 27 16.895 27 18 L 27 30 C 27 31.105 27.895 32 29 32 C 30.105 32 31 31.105 31 30 L 31 18 C 31 16.895 30.105 16 29 16 z"/></symbol>
+  <symbol id="i-tokens" viewBox="0 0 48 48"><path d="M 21 4 C 11.628921 4 4 11.628928 4 21 C 4 29.771828 10.685821 37.015492 19.226562 37.90625 C 21.639573 41.572872 25.791887 44 30.5 44 C 37.937774 44 44 37.937774 44 30.5 C 44 25.791887 41.572872 21.639573 37.90625 19.226562 C 37.015493 10.685826 29.771834 4 21 4 z M 21 7 C 28.381545 7 34.389811 12.674554 34.945312 19.910156 A 1.50015 1.50015 0 0 0 34.96875 20.396484 C 34.977319 20.598242 35 20.79608 35 21 C 35 28.749755 28.74976 35 21 35 C 20.741973 35 20.490855 34.97462 20.236328 34.960938 A 1.50041 1.50041 0 0 0 20.109375 34.955078 C 12.779336 34.495435 7 28.448844 7 21 C 7 13.250245 13.25024 7 21 7 z M 18.5 13 A 1.50015 1.50015 0 0 0 17.029297 14.205078 L 16.029297 19.205078 A 1.50015 1.50015 0 0 0 17.5 21 L 21.5 21 C 22.898226 21 24 22.101774 24 23.5 C 24 24.236687 23.753857 24.806219 23.296875 25.238281 C 22.839893 25.670344 22.126022 26 21 26 C 18.595533 26 17.25 25.201172 17.25 25.201172 A 1.50015 1.50015 0 1 0 15.75 27.798828 C 15.75 27.798828 17.872467 29 21 29 C 22.748978 29 24.285107 28.433656 25.359375 27.417969 C 26.433643 26.402281 27 24.972313 27 23.5 C 27 20.480226 24.519774 18 21.5 18 L 19.330078 18 L 19.730469 16 L 24.5 16 A 1.50015 1.50015 0 1 0 24.5 13 L 18.5 13 z M 37.867188 23.029297 C 39.800129 24.928748 41 27.566493 41 30.5 C 41 36.316226 36.316226 41 30.5 41 C 27.566493 41 24.928748 39.800129 23.029297 37.867188 C 30.77895 36.938501 36.938501 30.778945 37.867188 23.029297 z"/></symbol>
+  <symbol id="i-together" viewBox="0 0 48 48"><path d="M 28.445312 6.5488281 C 27.440631 6.5953381 26.439675 6.8534047 25.505859 7.3203125 A 1.50015 1.50015 0 0 0 25.425781 7.3632812 L 22.589844 9.0019531 A 1.50015 1.50015 0 0 0 22.5 9 L 3.5 9 A 1.50015 1.50015 0 1 0 3.5 12 L 16.263672 12 L 15.611328 12.271484 A 1.50015 1.50015 0 0 0 15.515625 12.314453 C 13.853271 13.14563 13.086366 14.916253 13.251953 16.509766 C 13.41754 18.103279 14.55833 19.691904 16.386719 20.148438 C 17.099441 20.326017 17.891122 20.429688 18.753906 20.429688 C 23.127522 20.429688 27.413208 19.06688 28.681641 18.646484 C 29.515727 19.577709 33.629168 24.174608 35.003906 25.582031 C 35.999406 26.600717 36.100247 27.595277 35.84375 28.302734 C 35.587253 29.010192 35.004956 29.556662 33.736328 29.560547 A 1.50015 1.50015 0 0 0 32.271484 30.757812 C 31.897484 32.566606 31.237465 32.823332 30.564453 33 C 29.891441 33.176668 29.242188 33.023437 29.242188 33.023438 A 1.50015 1.50015 0 0 0 27.347656 34.423828 C 27.347656 34.423828 27.297856 35.198288 26.916016 35.861328 C 26.534173 36.524368 26.136527 37.083241 24.355469 36.888672 A 1.50015 1.50015 0 0 0 22.714844 38.115234 C 22.510722 39.25684 21.889901 39.752414 20.958984 39.923828 C 20.028068 40.09524 18.76389 39.790454 17.658203 38.697266 C 16.242481 37.298073 11.080447 32.033729 8.7441406 29.648438 C 7.709711 28.592028 6.2930583 28 4.8183594 28 L 3.5 28 A 1.50015 1.50015 0 1 0 3.5 31 L 4.8183594 31 C 5.4956605 31 6.1299922 31.266456 6.6015625 31.748047 C 8.9392557 34.134755 14.052551 39.351271 15.548828 40.830078 C 17.274142 42.53589 19.49887 43.243836 21.501953 42.875 C 23.12614 42.575932 24.548611 41.443156 25.259766 39.828125 C 26.970357 39.685411 28.284706 38.899823 29.078125 37.962891 A 1.50015 1.50015 0 0 0 29.138672 37.964844 C 29.138672 37.964844 33.652598 38.043564 36.164062 37.964844 C 37.911175 37.910654 39.672501 37.317672 41.226562 35.955078 C 41.927622 35.340816 42.770995 34.998047 43.628906 34.998047 L 44.5 34.998047 A 1.50015 1.50015 0 1 0 44.5 31.998047 L 43.628906 31.998047 C 41.974817 31.998047 40.43894 32.657481 39.25 33.699219 C 38.158062 34.656625 37.291155 34.928989 36.072266 34.966797 A 1.50015 1.50015 0 0 0 36.070312 34.966797 C 35.251315 34.992506 34.110685 34.98723 33.037109 34.986328 C 33.802307 34.355544 34.48859 33.438614 34.912109 32.212891 C 36.645111 31.816698 38.113937 30.843505 38.664062 29.326172 C 39.343066 27.453379 38.814937 25.189689 37.148438 23.484375 C 35.885706 22.191622 30.279297 15.945313 30.279297 15.945312 A 1.50015 1.50015 0 0 0 28.675781 15.527344 C 28.675781 15.527344 22.963043 17.429688 18.753906 17.429688 C 18.130691 17.429688 17.588559 17.356698 17.113281 17.238281 C 16.51467 17.088813 16.288491 16.701206 16.236328 16.199219 C 16.184458 15.700089 16.348719 15.259427 16.851562 15.003906 L 21.546875 13.054688 A 1.50015 1.50015 0 0 0 21.722656 12.966797 L 26.855469 10 C 27.989616 9.4354405 29.194617 9.3929348 30.287109 9.8300781 L 37.046875 12.533203 C 37.815128 12.841807 38.63534 12.997802 39.460938 12.998047 L 44.5 13 A 1.50015 1.50015 0 1 0 44.5 10 L 39.462891 9.9980469 C 39.017142 9.9980469 38.577163 9.9151559 38.166016 9.75 A 1.50015 1.50015 0 0 0 38.162109 9.7480469 L 31.402344 7.0449219 C 30.457818 6.6669849 29.449995 6.5023184 28.445312 6.5488281 z"/></symbol>
+  <symbol id="i-tips" viewBox="0 0 48 48"><path d="M 6.78125 1.78125 A 1.50015 1.50015 0 0 0 5.7363281 4.3574219 L 7.1503906 5.7714844 A 1.50015 1.50015 0 1 0 9.2714844 3.6503906 L 7.8574219 2.2363281 A 1.50015 1.50015 0 0 0 6.78125 1.78125 z M 41.173828 1.7832031 A 1.50015 1.50015 0 0 0 40.142578 2.2363281 L 38.728516 3.6503906 A 1.50015 1.50015 0 1 0 40.849609 5.7714844 L 42.263672 4.3574219 A 1.50015 1.50015 0 0 0 41.173828 1.7832031 z M 24 4.015625 C 16.289774 4.0178592 10 10.286931 10 18 C 10 21.999465 11.691407 25.619495 14.388672 28.167969 C 14.705917 28.467557 14.938931 28.889561 15.046875 29.373047 L 17.513672 40.476562 C 17.969216 42.527257 19.805576 44 21.90625 44 L 24 44 L 26.09375 44 C 28.194629 44 30.030487 42.527102 30.486328 40.476562 L 32.955078 29.373047 L 32.955078 29.371094 C 33.062069 28.888989 33.293691 28.469343 33.611328 28.169922 L 33.611328 28.167969 L 33.613281 28.167969 C 36.309356 25.619613 38 21.999465 38 18 C 38 10.286931 31.710226 4.0178592 24 4.015625 z M 24 7.015625 C 30.093774 7.0173908 35 11.909069 35 18 C 35 21.156535 33.67466 23.980731 31.550781 25.988281 C 30.753594 26.740588 30.250209 27.709621 30.025391 28.722656 L 28.853516 34 L 19.146484 34 L 17.974609 28.720703 C 17.748553 27.708189 17.245974 26.740693 16.449219 25.988281 C 14.324484 23.980755 13 21.156535 13 18 C 13 11.909069 17.906226 7.0173908 24 7.015625 z M 1.5 15 A 1.50015 1.50015 0 1 0 1.5 18 L 4.5 18 A 1.50015 1.50015 0 1 0 4.5 15 L 1.5 15 z M 43.5 15 A 1.50015 1.50015 0 1 0 43.5 18 L 46.5 18 A 1.50015 1.50015 0 1 0 46.5 15 L 43.5 15 z M 39.773438 26.773438 A 1.50015 1.50015 0 0 0 38.728516 29.349609 L 40.142578 30.763672 A 1.50015 1.50015 0 1 0 42.263672 28.642578 L 40.849609 27.228516 A 1.50015 1.50015 0 0 0 39.773438 26.773438 z M 8.1816406 26.775391 A 1.50015 1.50015 0 0 0 7.1503906 27.228516 L 5.7363281 28.642578 A 1.50015 1.50015 0 1 0 7.8574219 30.763672 L 9.2714844 29.349609 A 1.50015 1.50015 0 0 0 8.1816406 26.775391 z M 19.814453 37 L 28.185547 37 L 27.558594 39.826172 C 27.404435 40.519634 26.804871 41 26.09375 41 L 24 41 L 21.90625 41 C 21.192924 41 20.595862 40.521478 20.441406 39.826172 L 19.814453 37 z"/></symbol>
+  <symbol id="i-todo" viewBox="0 0 48 48"><path d="M 16.470703 4.9863281 A 1.50015 1.50015 0 0 0 15.439453 5.4394531 L 9.5 11.378906 L 6.5605469 8.4394531 A 1.50015 1.50015 0 1 0 4.4394531 10.560547 L 8.4394531 14.560547 A 1.50015 1.50015 0 0 0 10.560547 14.560547 L 17.560547 7.5605469 A 1.50015 1.50015 0 0 0 16.470703 4.9863281 z M 21.5 9 A 1.50015 1.50015 0 1 0 21.5 12 L 42.5 12 A 1.50015 1.50015 0 1 0 42.5 9 L 21.5 9 z M 16.470703 18.486328 A 1.50015 1.50015 0 0 0 15.439453 18.939453 L 9.5 24.878906 L 6.5605469 21.939453 A 1.50015 1.50015 0 1 0 4.4394531 24.060547 L 8.4394531 28.060547 A 1.50015 1.50015 0 0 0 10.560547 28.060547 L 17.560547 21.060547 A 1.50015 1.50015 0 0 0 16.470703 18.486328 z M 21.5 22.5 A 1.50015 1.50015 0 1 0 21.5 25.5 L 42.5 25.5 A 1.50015 1.50015 0 1 0 42.5 22.5 L 21.5 22.5 z M 16.470703 31.986328 A 1.50015 1.50015 0 0 0 15.439453 32.439453 L 9.5 38.378906 L 6.5605469 35.439453 A 1.50015 1.50015 0 1 0 4.4394531 37.560547 L 8.4394531 41.560547 A 1.50015 1.50015 0 0 0 10.560547 41.560547 L 17.560547 34.560547 A 1.50015 1.50015 0 0 0 16.470703 31.986328 z M 21.5 36 A 1.50015 1.50015 0 1 0 21.5 39 L 42.5 39 A 1.50015 1.50015 0 1 0 42.5 36 L 21.5 36 z"/></symbol>
+  <symbol id="i-link" viewBox="0 0 48 48"><path d="M 41.470703 4.9863281 A 1.50015 1.50015 0 0 0 41.308594 5 L 27.5 5 A 1.50015 1.50015 0 1 0 27.5 8 L 37.878906 8 L 22.439453 23.439453 A 1.50015 1.50015 0 1 0 24.560547 25.560547 L 40 10.121094 L 40 20.5 A 1.50015 1.50015 0 1 0 43 20.5 L 43 6.6894531 A 1.50015 1.50015 0 0 0 41.470703 4.9863281 z M 12.5 8 C 8.3754991 8 5 11.375499 5 15.5 L 5 35.5 C 5 39.624501 8.3754991 43 12.5 43 L 32.5 43 C 36.624501 43 40 39.624501 40 35.5 L 40 25.5 A 1.50015 1.50015 0 1 0 37 25.5 L 37 35.5 C 37 38.003499 35.003499 40 32.5 40 L 12.5 40 C 9.9965009 40 8 38.003499 8 35.5 L 8 15.5 C 8 12.996501 9.9965009 11 12.5 11 L 22.5 11 A 1.50015 1.50015 0 1 0 22.5 8 L 12.5 8 z"/></symbol>
+</svg>
+
+<main id="app">
+  <header id="s-tldr">
+    <p class="eyebrow" id="week"></p>
+    <p class="tldr" id="tldr"></p>
+  </header>
+
+  <section id="s-numbers" aria-label="Цифры недели">
+    <dl class="numbers" id="numbers"></dl>
+  </section>
+
+  <section id="s-done" class="done">
+    <h2><svg class="ic"><use href="#i-done"/></svg>Сделано<span class="count"></span></h2>
+    <ul class="items" id="done"></ul>
+  </section>
+
+  <section id="s-progress">
+    <h2><svg class="ic"><use href="#i-progress"/></svg>В работе<span class="count"></span></h2>
+    <ul class="items" id="progress"></ul>
+  </section>
+
+  <section id="s-dropped" class="dropped">
+    <h2><svg class="ic"><use href="#i-dropped"/></svg>Брошено<span class="count"></span></h2>
+    <ul class="items" id="dropped"></ul>
+  </section>
+
+  <section id="s-tokens" class="tokens">
+    <h2><svg class="ic"><use href="#i-tokens"/></svg>Куда ушли токены</h2>
+    <ul class="items" id="tokens"></ul>
+  </section>
+
+  <section id="s-together">
+    <h2><svg class="ic"><use href="#i-together"/></svg>Как работали вместе</h2>
+    <div class="together">
+      <div class="good" id="good-box"><h3>Шло легко</h3><ul id="good"></ul></div>
+      <div class="slow" id="slow-box"><h3>Тормозило</h3><ul id="slow"></ul></div>
+    </div>
+  </section>
+
+  <section id="s-tips">
+    <h2><svg class="ic"><use href="#i-tips"/></svg>Что попробовать</h2>
+    <div id="tips"></div>
+  </section>
+
+  <section id="s-todo" class="todo">
+    <h2><svg class="ic"><use href="#i-todo"/></svg>На эту неделю</h2>
+    <p class="sub" id="filed-sub">Уже заведено</p>
+    <ul class="items" id="filed"></ul>
+    <p class="sub" id="notfiled-sub">Обсуждали, но задачи нет</p>
+    <ul class="items notfiled" id="notfiled"></ul>
+  </section>
+</main>
+
+<script id="recap-data" type="application/json">
+{
+  "week": "5–11 октября",
+  "tldr": "Главное за неделю: запустили генерацию Y2K в Midjourney и собрали 14 объектов. Хаб стал стабильнее, но вы трижды переписывали одну и ту же задачу про промпты — это съело полдня.",
+  "numbers": [
+    {"label": "Задач закрыто", "value": "12", "hint": "из 17 начатых"},
+    {"label": "С первого раза", "value": "7 из 12", "hint": "остальные с правками"},
+    {"label": "Работа агентов", "value": "31 ч", "hint": "пока вы занимались своим"},
+    {"label": "Токенов", "value": "48 млн", "hint": "≈ $310 по прайсу API"}
+  ],
+  "done": [
+    {"title": "Y2K: 14 иллюстраций в Midjourney", "where": "Генерация · Y2K", "story": "От исходника в GPT до апскейла, всё лежит в папках объектов.", "tokens": "9,2 млн", "first_try": false},
+    {"title": "Плагин Teams проверен", "where": "Хаб", "story": "Посмотрели код до установки: делает, что обещает.", "tokens": "0,4 млн", "first_try": true}
+  ],
+  "in_progress": [
+    {"title": "Frutiger Aero: материалы", "where": "Генерация · Frutiger", "next": "Ждёт вашего выбора из 6 вариантов", "tokens": "3,1 млн"}
+  ],
+  "dropped": [
+    {"title": "Мини-сайт для Brila", "why": "Обсуждение стихло в среду, к нему не возвращались"}
+  ],
+  "tokens_by_task": [
+    {"title": "Y2K: 14 иллюстраций", "tokens": "9,2 млн", "share": 0.19},
+    {"title": "Frutiger Aero: материалы", "tokens": "3,1 млн", "share": 0.06}
+  ],
+  "together": {
+    "good": ["Короткие задачи с примером результата закрывались с первого раза."],
+    "slow": ["Задачи без «готово, когда…» возвращались на доработку 2–3 раза."]
+  },
+  "tips": [
+    {"tip": "Пишите, как выглядит готово", "example": "«Сделай промпты для Frutiger» ушло на три круга.", "try": "«Промпты для 5 объектов, как у Y2K Box, готово — когда я выбрал в Фигме»."}
+  ],
+  "todo": {
+    "filed": [
+      {"title": "Обложки для блога, октябрь", "source": "Jira", "link": "https://example.atlassian.net/browse/ICN-1", "due": "до пятницы"},
+      {"title": "Ответить Ане про лендинг", "source": "Teams", "link": "", "due": ""}
+    ],
+    "not_filed": [
+      {"title": "Обсудили на созвоне ретро-пак иконок, задачи нет", "source": "Granola", "why": "договорились на встрече 9 октября"}
+    ]
+  }
+}
+</script>
+
+<script>
+(() => {
+  let d = {};
+  try { d = JSON.parse(document.getElementById("recap-data").textContent) || {}; } catch (e) { d = {}; }
+
+  const $ = (id) => document.getElementById(id);
+  const list = (v) => (Array.isArray(v) ? v.filter(Boolean) : []);
+  const text = (v) => (v == null ? "" : String(v).trim());
+  const el = (tag, cls, txt) => {
+    const n = document.createElement(tag);
+    if (cls) n.className = cls;
+    if (txt) n.textContent = txt;
+    return n;
+  };
+  const icon = (id, cls) => {
+    const ns = "http://www.w3.org/2000/svg";
+    const s = document.createElementNS(ns, "svg");
+    s.setAttribute("class", "ic" + (cls ? " " + cls : ""));
+    s.setAttribute("aria-hidden", "true");
+    const u = document.createElementNS(ns, "use");
+    u.setAttribute("href", "#" + id);
+    s.append(u);
+    return s;
+  };
+  const meta = (...parts) => {
+    const p = el("p", "meta");
+    parts.map(text).filter(Boolean).forEach((t) => p.append(el("span", null, t)));
+    return p.childNodes.length ? p : null;
+  };
+  const add = (parent, ...kids) => kids.forEach((k) => k && parent.append(k));
+  const show = (id, on) => { $(id).hidden = !on; };
+  const count = (sec, n) => { const c = $(sec).querySelector(".count"); if (c) c.textContent = n > 1 ? String(n) : ""; };
+  const safeUrl = (u) => (/^https?:\/\//i.test(text(u)) ? text(u) : "");
+
+  // шапка
+  const week = text(d.week), tldr = text(d.tldr);
+  $("week").textContent = week ? "Неделя " + week : "Ваша неделя";
+  if (week) document.title = "Неделя " + week;
+  $("tldr").textContent = tldr;
+  $("tldr").hidden = !tldr;
+
+  // цифры
+  const nums = list(d.numbers).filter((n) => text(n.value));
+  nums.forEach((n) => {
+    const box = el("div");
+    const dt = el("dt", null, text(n.label));
+    if (text(n.hint)) dt.append(el("span", "hint", text(n.hint)));
+    add(box, dt, el("dd", null, text(n.value)));
+    $("numbers").append(box);
+  });
+  show("s-numbers", nums.length);
+
+  // сделано
+  const done = list(d.done);
+  done.forEach((t) => {
+    const li = el("li"), row = el("div", "row"), body = el("div");
+    add(body, el("p", "title", text(t.title)), meta(t.where, t.tokens && t.tokens + " токенов"),
+        text(t.story) && el("p", "story", text(t.story)));
+    let tag = null;
+    if (t.first_try) { tag = el("span", "tag good"); tag.append(icon("i-check", "sm"), "с первого раза"); }
+    add(row, body, tag);
+    li.append(row);
+    $("done").append(li);
+  });
+  show("s-done", done.length); count("s-done", done.length);
+
+  // в работе
+  const prog = list(d.in_progress);
+  prog.forEach((t) => {
+    const li = el("li");
+    add(li, el("p", "title", text(t.title)), meta(t.where, t.tokens && t.tokens + " токенов"));
+    if (text(t.next)) { const p = el("p", "next"); p.append(el("b", null, "Дальше: "), text(t.next)); li.append(p); }
+    $("progress").append(li);
+  });
+  show("s-progress", prog.length); count("s-progress", prog.length);
+
+  // брошено
+  const drop = list(d.dropped);
+  drop.forEach((t) => {
+    const li = el("li");
+    add(li, el("p", "title", text(t.title)), text(t.why) && el("p", "story", text(t.why)));
+    $("dropped").append(li);
+  });
+  show("s-dropped", drop.length); count("s-dropped", drop.length);
+
+  // токены
+  const tok = list(d.tokens_by_task);
+  tok.forEach((t) => {
+    const share = Math.max(0, Math.min(1, Number(t.share) || 0));
+    const li = el("li"), line = el("div", "line");
+    const pct = Math.round(share * 100);
+    add(line, el("p", "title", text(t.title)),
+        el("span", "val", [text(t.tokens), pct ? pct + "%" : ""].filter(Boolean).join(" · ")));
+    const bar = el("div", "bar"), fill = el("i");
+    fill.style.width = (share * 100).toFixed(1) + "%";
+    bar.append(fill);
+    bar.setAttribute("role", "img");
+    bar.setAttribute("aria-label", pct + "% токенов недели");
+    add(li, line, bar);
+    $("tokens").append(li);
+  });
+  show("s-tokens", tok.length);
+
+  // вместе
+  const tg = d.together || {};
+  const good = list(tg.good).map(text).filter(Boolean), slow = list(tg.slow).map(text).filter(Boolean);
+  good.forEach((s) => $("good").append(el("li", null, s)));
+  slow.forEach((s) => $("slow").append(el("li", null, s)));
+  show("good-box", good.length); show("slow-box", slow.length);
+  show("s-together", good.length || slow.length);
+  if (!good.length || !slow.length) document.querySelector(".together").style.gridTemplateColumns = "1fr";
+
+  // советы
+  const tips = list(d.tips).filter((t) => text(t.tip));
+  tips.forEach((t) => {
+    const box = el("article", "tip"), dl = el("dl");
+    box.append(el("p", "title", text(t.tip)));
+    if (text(t.example)) add(dl, el("dt", null, "Как было на этой неделе"), el("dd", null, text(t.example)));
+    if (text(t.try)) add(dl, el("dt", null, "Как попробовать"), el("dd", "try", text(t.try)));
+    if (dl.childNodes.length) box.append(dl);
+    $("tips").append(box);
+  });
+  show("s-tips", tips.length);
+
+  // туду
+  const td = d.todo || {};
+  const filed = list(td.filed), nf = list(td.not_filed);
+  const todoItem = (t, withLink) => {
+    const li = el("li"), row = el("div", "row"), body = el("div");
+    const m = el("p", "meta");
+    if (text(t.source)) m.append(el("span", "src", text(t.source)));
+    if (text(t.due)) m.append(el("span", "due", text(t.due)));
+    if (text(t.why)) m.append(el("span", null, text(t.why)));
+    const url = withLink && safeUrl(t.link);
+    if (url) {
+      const s = el("span"), a = el("a", "open", "Открыть");
+      a.href = url; a.target = "_blank"; a.rel = "noopener";
+      a.append(icon("i-link", "sm"));
+      s.append(a); m.append(s);
+    }
+    add(body, el("p", "title", text(t.title)), m.childNodes.length && m);
+    add(row, el("span", "check"), body);
+    li.append(row);
+    return li;
+  };
+  filed.forEach((t) => $("filed").append(todoItem(t, true)));
+  nf.forEach((t) => $("notfiled").append(todoItem(t, false)));
+  show("filed-sub", filed.length); show("filed", filed.length);
+  show("notfiled-sub", nf.length); show("notfiled", nf.length);
+  show("s-todo", filed.length || nf.length);
+})();
+</script>
+</body>
+</html>
