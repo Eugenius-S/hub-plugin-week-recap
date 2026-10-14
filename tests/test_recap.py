@@ -239,7 +239,8 @@ class Flow(unittest.TestCase):
 class Work(unittest.TestCase):
     def test_tokens_go_to_the_task_or_the_discussion_and_lively_silence_is_faded(self):
         d = {"channel": "web", "owner": True}
-        evs = [ev(1, at(2026, 10, 5, 10), "message.received", to="gen", text="сделай баннер", **d),
+        evs = [ev(0, at(2026, 10, 5, 9, 30), "turn.result", "gen", tokens_in=5, tokens_out=0),   # до просьбы — своё
+               ev(1, at(2026, 10, 5, 10), "message.received", to="gen", text="сделай баннер", **d),
                ev(2, at(2026, 10, 5, 10, 5), "turn.result", "gen", tokens_in=1000, tokens_out=10),
                ev(3, at(2026, 10, 5, 11), "message.received", to="gen", text="правки", **d),
                ev(4, at(2026, 10, 5, 12), "message.received", to="gen", text="ещё", **d),
@@ -255,7 +256,8 @@ class Work(unittest.TestCase):
                          (3, 1510, 1.5, "Генерация", True))
         self.assertEqual((work["d6"]["tokens"], bool(work["d6"]["done"])), (300, True))
         self.assertEqual(work["s:pe"]["tokens"], 7)                     # после сдачи — своё, не задача
-        self.assertFalse(work["m10"]["faded"])                          # одно слово — не активное обсуждение
+        self.assertFalse(work["m10"]["faded"])
+        self.assertEqual((work["s:gen"]["tokens"], work["s:gen"]["owner_msgs"]), (5, 0))   # слова владельца — не в своё                          # одно слово — не активное обсуждение
 
 
 class StartMode(unittest.TestCase):

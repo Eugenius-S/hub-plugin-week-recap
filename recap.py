@@ -307,7 +307,7 @@ def items(evs, end, spent=None, where=None):
     её обсуждению; токены и цена (spent: seq хода → usd) — к ним. Обсуждение, где владелец писал не меньше LIVELY раз и
     замолчал дольше FADED до конца недели, — «стихло»: по нему решает разбирающий (сделано или брошено)."""
     spent, where = spent or {}, where or {}
-    out, last_thread, open_tasks = [], {}, {}
+    out, last_thread, open_tasks, own = [], {}, {}, {}
     for e in evs:
         t, d, ent, ts = e.get("type"), e.get("data") or {}, e.get("entity"), e.get("ts") or 0
         if t == "message.received" and _owner(d) and d.get("to") and \
@@ -337,9 +337,9 @@ def items(evs, end, spent=None, where=None):
                         tasks.remove(task)
                         break
         elif t == "turn.result" and ent:
-            box = (open_tasks.get(ent) or [None])[-1] or last_thread.get(ent)
-            if not box:
-                box = last_thread[ent] = {"id": f"s:{ent}", "kind": "своё", "session": ent,
+            box = (open_tasks.get(ent) or [None])[-1] or last_thread.get(ent) or own.get(ent)
+            if not box:   # ход без просьбы владельца на этой неделе — своё сессии (расписание, сторож)
+                box = own[ent] = {"id": f"s:{ent}", "kind": "своё", "session": ent,
                                           "where": where.get(ent) or ent, "topic": "", "first": ts, "last": ts,
                                           "owner_msgs": 0, "tokens": 0, "usd": 0.0, "turns": 0}
                 out.append(box)
