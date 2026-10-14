@@ -16,6 +16,7 @@ import main   # noqa: E402
 import recap  # noqa: E402
 
 main.REPORTS = tempfile.mkdtemp(prefix="wr-reports-")   # копии отчётов — не в папку плагина
+main.OTHERS = tempfile.mkdtemp(prefix="wr-others-")     # выгрузки другого хаба — не из живого репо
 
 ZONE = zoneinfo.ZoneInfo("Europe/Berlin")
 
@@ -258,6 +259,56 @@ class Work(unittest.TestCase):
         self.assertEqual(work["s:pe"]["tokens"], 7)                     # после сдачи — своё, не задача
         self.assertFalse(work["m10"]["faded"])
         self.assertEqual((work["s:gen"]["tokens"], work["s:gen"]["owner_msgs"]), (5, 0))   # слова владельца — не в своё                          # одно слово — не активное обсуждение
+
+    def test_every_project_is_in_the_work_digest_even_a_small_one(self):
+        """14.10: из 118 строк недели первые 60 по токенам — почти одна работа над хабом; реклама ушла в «остальное»."""
+        work = [{"id": f"m{i}", "kind": "обсуждение", "session": "dev", "where": "Хаб", "topic": f"правка {i}",
+                 "first": MON, "last": MON, "owner_msgs": 1, "tokens": 10_000_000, "usd": 1.0, "turns": 1,
+                 "faded": False} for i in range(80)]
+        work.append({"id": "d99", "kind": "задача", "session": "ads-x", "where": "Реклама", "topic": "ролики трекера",
+                     "first": MON, "last": MON, "owner_msgs": 0, "tokens": 1000, "usd": 0.1, "turns": 2, "done": MON})
+        text = recap.work_digest("2026-W41", MON, at(2026, 10, 12, 0), work, ZONE)
+        self.assertIn("## Реклама", text)
+        self.assertIn("ролики трекера", text)
+        self.assertLess(text.index("## Хаб"), text.index("## Реклама"))   # крупное — выше
+        self.assertIn("остальное", text)                                   # у крупного хвост свёрнут
+
+    def test_the_period_may_end_before_sunday(self):
+        start, end, label = recap.week_of("2026-W41", ZONE, "2026-10-09")
+        self.assertEqual((start, end, label), (MON, at(2026, 10, 10, 0), "2026-W41"))
+        self.assertEqual(main.period({"start": start, "end": end}, ZONE), "5–9 октября")
+
+    def test_the_other_hubs_week_joins_without_mixing_sessions(self):
+        """Два хаба через GitHub (hub-sync/work/<машина>/): рекап — по работе обоих (владелец 14.10)."""
+        d = tempfile.mkdtemp()
+        os.makedirs(os.path.join(d, "Win"))
+        other = [{"type": "hub.where", "data": {"ads": "Реклама"}},
+                 ev(1, at(2026, 10, 6, 10), "message.received", to="ads", text="ролик трекера", **OWNER),
+                 ev(2, at(2026, 10, 6, 10, 5), "delegation.created", session="analyst", context="ресёрч", **{"for": "m1"}),
+                 ev(3, at(2026, 10, 6, 11), "turn.result", "analyst", text="1", tokens_in=700, tokens_out=0),
+                 ev(4, at(2026, 10, 6, 11, 1), "delegation.done", "d2"),
+                 ev(5, at(2026, 10, 13, 10), "message.received", to="ads", text="следующая неделя", **OWNER)]
+        with open(os.path.join(d, "Win", "2026-W41.jsonl"), "w") as f:
+            f.write("".join(json.dumps(e) + "\n" for e in other))
+        with open(os.path.join(d, "Win", "2026-W42.jsonl"), "w") as f:
+            f.write(json.dumps(other[0]) + "\n" + json.dumps(other[-1]) + "\n")
+        evs, where = recap.other_hubs(d, MON, at(2026, 10, 12, 0), "Mac")
+        self.assertEqual(where, {"ads@Win": "Реклама"})
+        mine = [ev(2, at(2026, 10, 6, 9), "delegation.created", session="analyst", context="своё", **{"for": None}),
+                ev(9, at(2026, 10, 6, 12), "turn.result", "analyst", tokens_in=5, tokens_out=0)]
+        work = {x["id"]: x for x in recap.items(recap.merged(mine, evs), at(2026, 10, 12, 0), {}, where)}
+        self.assertEqual((work["mWin:1"]["where"], work["mWin:1"]["topic"]), ("Реклама", "ролик трекера"))
+        self.assertEqual((work["dWin:2"]["tokens"], bool(work["dWin:2"]["done"])), (700, True))
+        self.assertEqual((work["d2"]["tokens"], work["d2"]["done"]), (5, None))   # своя задача analyst — своя
+        self.assertNotIn("следующая неделя", json.dumps(evs, ensure_ascii=False))
+        self.assertEqual(recap.measure(recap.merged(mine, evs))["numbers"]["owner_messages"], 1)
+        self.assertEqual(recap.other_hubs(d, MON, at(2026, 10, 12, 0), "Win"), ([], {}))   # свой файл — не чужой
+        self.assertEqual(recap.other_hubs(d, MON, at(2026, 10, 12, 0), "Win.local"), ([], {}))
+        note = recap.hubs_note({"Win", "Mac.local", "Old"}, evs, "Mac")
+        self.assertIn("Win вошла", note)
+        self.assertIn("Old за эти дни не выгружал", note)
+        self.assertNotIn("Mac", note)
+        self.assertIn(note, recap.work_digest("2026-W41", MON, at(2026, 10, 12, 0), [], ZONE, note=note))
 
 
 class StartMode(unittest.TestCase):

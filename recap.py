@@ -69,11 +69,14 @@ def last_week(now, zone):
     return start.timestamp(), monday.timestamp(), f"{year}-W{week:02d}"
 
 
-def week_of(label, zone):
-    """Метка 2026-W41 → (начало, конец, метка)."""
+def week_of(label, zone, until=None):
+    """Метка 2026-W41 → (начало, конец, метка); until — последний день включительно (2026-10-09: пн–пт)."""
     year, week = label.split("-W")
     start = datetime.datetime.fromisocalendar(int(year), int(week), 1).replace(tzinfo=zone)
-    return start.timestamp(), (start + datetime.timedelta(days=7)).timestamp(), label
+    end = start + datetime.timedelta(days=7)
+    if until:
+        end = datetime.datetime.fromisoformat(until).replace(tzinfo=zone) + datetime.timedelta(days=1)
+    return start.timestamp(), end.timestamp(), label
 
 
 def due(now, zone, done, when=DEFAULT, started=None):
@@ -119,6 +122,56 @@ def events(paths, start, end):
                     out[seq] = e
     return [out[s] for s in sorted(out)]
 
+
+
+def _theirs(e, host):
+    """Событие другого хаба — с его метками: seq, сессии, задачи и формы не путаются со своими (analyst есть у обоих)."""
+    d, ent = dict(e.get("data") or {}), e.get("entity")
+    at = lambda x: x and f"{x}@{host}"   # noqa: E731
+    for k in ("to", "session"):
+        if d.get(k):
+            d[k] = at(d[k])
+    if d.get("for"):
+        d["for"] = f"{d['for'][0]}{host}:{d['for'][1:]}"
+    if d.get("request_id"):
+        d["request_id"] = at(d["request_id"])
+    ent = f"d{host}:{ent[1:]}" if e.get("type") == "delegation.done" and ent else at(ent)
+    return {**e, "seq": f"{host}:{e['seq']}", "entity": ent, "data": d}
+
+
+def other_hubs(root, start, end, me):
+    """Работа других хабов (hub-sync/work/<машина>/<неделя>.jsonl, выгружает их обмен): (события [start, end),
+    сессия → проект). Свою машину не берём — её журнал свой."""
+    evs, where = [], {}
+    for host in sorted(os.listdir(root) if os.path.isdir(root) else []):
+        if host.split(".")[0] == me.split(".")[0]:   # MacBook.local и MacBook — одна машина, не задвоить свою
+            continue
+        for path in sorted(glob.glob(os.path.join(root, host, "*.jsonl"))):
+            with open(path, encoding="utf-8") as f:
+                for line in f:
+                    try:
+                        e = json.loads(line)
+                    except ValueError:
+                        continue
+                    if e.get("type") == "hub.where":
+                        where.update({f"{k}@{host}": v for k, v in (e.get("data") or {}).items()})
+                    elif start <= (e.get("ts") or 0) < end and e.get("seq") is not None:
+                        evs.append(_theirs(e, host))
+    return evs, where
+
+
+def hubs_note(machines, theirs, me):
+    """Строка в сводку: чья работа вошла, чья нет. machines — машины, известные обмену (hub-sync/agents/*/machines)."""
+    got = sorted({str(e["seq"]).split(":")[0] for e in theirs})
+    miss = sorted({m for m in machines if m.split(".")[0] != me.split(".")[0] and m not in got})
+    parts = [f"работа хаба {h} вошла (без цен — $ только этого хаба)" for h in got]
+    parts += [f"хаб {h} за эти дни не выгружал работу — она не вошла, скажи об этом владельцу одной строкой" for h in miss]
+    return ("Другие хабы: " + "; ".join(parts) + ".") if parts else ""
+
+
+def merged(mine, theirs):
+    """Свои и чужие события по времени."""
+    return sorted(mine + theirs, key=lambda e: e.get("ts") or 0)
 
 def _owner(d):
     return d.get("owner") is True and d.get("channel") in OWNER_CHANNELS
@@ -242,7 +295,7 @@ def prompt(label, period, digest_path, work_path, draft_path, sample_path):
         f"токенами — `{work_path}`, слова владельца, задачи и вопросы по времени — `{digest_path}`. Рамка — вся его "
         "работа за неделю, не только твоя область.\n"
         "1. Что сделано, что в работе, что брошено: склей обсуждения и задачи в его человеческие задачи (одна цель — "
-        "одна задача). Обсуждение «стихло» — реши по смыслу: сделано (результат был) или брошено. С первого раза или "
+        "одна задача). Каждый проект из work.md (раздел ##) — в отчёте, хоть строкой; крупные — по задачам. Обсуждение «стихло» — реши по смыслу: сделано (результат был) или брошено. С первого раза или "
         "с правками. Токены задачи — сумма её строк.\n"
         "2. Jira (MCP atlassian), Granola (MCP granola), Teams (MCP ms365) — только чтение: что закрыто за неделю, о "
         "чём договорились на встречах, что просили в Teams. Нет доступа к чему-то — "
@@ -358,19 +411,30 @@ def human_tokens(n):
     return f"{n / 1e6:.1f} млн".replace(".", ",") if n >= 1e5 else f"{round(n / 1e3)} тыс"
 
 
-def work_digest(label, start, end, work, zone, top=60):
-    """Сводка работы недели для разбора: что владелец обсуждал и поручал, сколько ушло токенов, что стихло."""
+def work_digest(label, start, end, work, zone, top=12, note=""):
+    """Сводка работы недели для разбора: по проектам, крупное выше; в проекте — что владелец обсуждал и поручал,
+    сколько ушло токенов, что стихло. Хвост проекта свёрнут, но ни один проект не пропадает (14.10: общий верх по
+    токенам — почти одна работа над хабом, реклама ушла в «остальное»)."""
     total = sum(x["tokens"] for x in work) or 1
     lines = [f"# Работа недели {label}: {_at(start, zone)} — {_at(end - 1, zone)}", "",
              f"Всего токенов: {human_tokens(total)}, ≈ ${round(sum(x['usd'] for x in work))} по прайсу API.", "",
-             "Строка: id · что · где · период · слов владельца · ходов · токены (доля) · $ · состояние", ""]
-    for x in work[:top]:
-        state = ("сдана" if x.get("done") else "не сдана") if x["kind"] == "задача" else \
-            ("стихло — реши, сделано или брошено" if x.get("faded") else "") if x["kind"] == "обсуждение" else "без просьбы владельца"
-        lines.append(f"- {x['id']} · {x['kind']}: {_cut(x['topic'], 300) or '—'} · {x['where']} · "
-                     f"{_at(x['first'], zone)} — {_at(x['last'], zone)} · {x['owner_msgs']} · {x['turns']} · "
-                     f"{human_tokens(x['tokens'])} ({round(100 * x['tokens'] / total)}%) · ${x['usd']} · {state}")
-    rest = work[top:]
-    if rest:
-        lines.append(f"- остальное: {len(rest)} шт., {human_tokens(sum(x['tokens'] for x in rest))}")
+             *([note, ""] if note else []),
+             "Строка: id · что · период · слов владельца · ходов · токены (доля) · $ · состояние"]
+    groups = {}
+    for x in work:
+        groups.setdefault(x["where"], []).append(x)
+    for where, xs in sorted(groups.items(), key=lambda g: -sum(x["tokens"] for x in g[1])):
+        xs = sorted(xs, key=lambda x: -x["tokens"])
+        tok = sum(x["tokens"] for x in xs)
+        lines += ["", f"## {where} — {human_tokens(tok)} ({round(100 * tok / total)}%)", ""]
+        for x in xs[:top]:
+            state = ("сдана" if x.get("done") else "не сдана") if x["kind"] == "задача" else \
+                ("стихло — реши, сделано или брошено" if x.get("faded") else "") if x["kind"] == "обсуждение" \
+                else "без просьбы владельца"
+            lines.append(f"- {x['id']} · {x['kind']}: {_cut(x['topic'], 300) or '—'} · "
+                         f"{_at(x['first'], zone)} — {_at(x['last'], zone)} · {x['owner_msgs']} · {x['turns']} · "
+                         f"{human_tokens(x['tokens'])} ({round(100 * x['tokens'] / total)}%) · ${x['usd']} · {state}")
+        rest = xs[top:]
+        if rest:
+            lines.append(f"- остальное: {len(rest)} шт., {human_tokens(sum(x['tokens'] for x in rest))}")
     return "\n".join(lines) + "\n"

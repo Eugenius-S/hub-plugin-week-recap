@@ -4,11 +4,14 @@
 Teams, writer переписывает тексты по-человечески, плагин кладёт их в HTML дизайнера и шлёт владельцу.
 Журнал только читает; пишет — фактами в ящик ядра. Своё — в <состояние хаба>/week-recap/.
 
-Руками: python3 main.py --week 2026-W41 [--dry]   — собрать сводку недели (--dry — ничего не отправлять)
+Руками: python3 main.py --week 2026-W41 [--to 2026-10-09] [--dry]   — собрать сводку недели (--to — последний день,
+по умолчанию воскресенье; --dry — ничего не отправлять)
 """
+import glob
 import json
 import os
 import shutil
+import socket
 import sys
 import time
 
@@ -26,6 +29,7 @@ WAIT = 6 * 3600          # черновик не пришёл за 6 ч — вл
 WRITER_WAIT = 3 * 3600   # райтер не ответил за 3 ч — отчёт по черновику
 TEMPLATE = os.path.join(HERE, "web", "report-template.html")
 SAMPLE = os.path.join(HERE, "web", "sample.json")
+OTHERS = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(catalog.__file__))), "hub-sync", "work")
 REPORTS = os.path.join(HERE, "web", "reports")   # копия отчёта для ссылки со страницы хаба
 KEEP = 12                # недель во вкладке
 STARTED = time.time()    # когда поднялся процесс: «пн старт» — первый запуск хаба в понедельник
@@ -66,10 +70,19 @@ def where_of(state):
     return out
 
 
-def collect(label, zone, state_dir=STATE_DIR, home=HOME, state=None):
-    """Сводки недели в файлы: (запись недели, путь к сводке)."""
-    start, end, label = recap.week_of(label, zone)
-    evs = recap.events(recap.journals(state_dir), start, end)
+def machines():
+    """Машины, которые знает обмен хабов: hub-sync/agents/*/machines/<машина>.json."""
+    names = glob.glob(os.path.join(os.path.dirname(OTHERS), "agents", "*", "machines", "*.json"))
+    return {os.path.basename(p)[:-5] for p in names}
+
+
+def collect(label, zone, state_dir=STATE_DIR, home=HOME, state=None, until=None, others=None):
+    """Сводки недели в файлы: (запись недели, путь к сводке). until — последний день (2026-10-09), иначе вся неделя;
+    others — выгрузки других хабов (hub-sync/work), их работа идёт в ту же сводку."""
+    start, end, label = recap.week_of(label, zone, until)
+    mine = recap.events(recap.journals(state_dir), start, end)
+    theirs, their_where = recap.other_hubs(others or OTHERS, start, end, socket.gethostname())
+    evs = recap.merged(mine, theirs)
     m = recap.measure(evs)
     try:
         paid, _ = usage.spends(usage.facts(state_dir))
@@ -80,7 +93,7 @@ def collect(label, zone, state_dir=STATE_DIR, home=HOME, state=None):
                 spent[e["seq"]] = by_ts.get((e.get("entity"), round(e.get("ts") or 0, 3)), 0.0)
     except Exception:   # noqa: BLE001 — без цен — одни токены
         spent = {}
-    work = recap.items(evs, end, spent, where_of(state))
+    work = recap.items(evs, end, spent, {**where_of(state), **their_where})
     folder = os.path.join(home, label)
     os.makedirs(folder, exist_ok=True)
     path = os.path.join(folder, "digest.md")
@@ -88,7 +101,8 @@ def collect(label, zone, state_dir=STATE_DIR, home=HOME, state=None):
         f.write(recap.digest(label, start, end, m, zone))
     work_path = os.path.join(folder, "work.md")
     with open(work_path, "w", encoding="utf-8") as f:
-        f.write(recap.work_digest(label, start, end, work, zone))
+        f.write(recap.work_digest(label, start, end, work, zone, note=recap.hubs_note(
+            machines(), theirs, socket.gethostname())))
     return {"start": start, "end": end, "numbers": m["numbers"], "digest": path, "work": work_path,
             "draft": os.path.join(folder, "draft.json"), "final": os.path.join(folder, "recap.json"),
             "report": os.path.join(folder, "report.html"), "recap": os.path.join(folder, "recap.json")}, path
@@ -103,8 +117,8 @@ def period(w, zone):
         f"{a.day} {months[a.month - 1]} – {b.day} {months[b.month - 1]}"
 
 
-def start(label, zone, now, mine, state, send=put, state_dir=STATE_DIR, home=HOME):
-    week, _ = collect(label, zone, state_dir, home, state)
+def start(label, zone, now, mine, state, send=put, state_dir=STATE_DIR, home=HOME, until=None):
+    week, _ = collect(label, zone, state_dir, home, state, until)
     to = recap.reviewer(state)
     week.update(to=to, sent=now, period=period(week, zone))
     if to:
@@ -223,11 +237,12 @@ def main():
     if "--week" in sys.argv:
         label = sys.argv[sys.argv.index("--week") + 1]
         zone = recap.tz((mine.get("schedule") or recap.DEFAULT)["zone"])
+        until = sys.argv[sys.argv.index("--to") + 1] if "--to" in sys.argv else None
         if "--dry" in sys.argv:
-            week, path = collect(label, zone, state=journal.load_state(STATE_DIR))
-            print(numbers_text(week["numbers"]) + f"\n\nСводка: {path}")
+            week, path = collect(label, zone, state=journal.load_state(STATE_DIR), until=until)
+            print(numbers_text(week["numbers"]) + f"\n\nСводка: {path}\nРабота: {week['work']}")
             return
-        start(label, zone, time.time(), mine, journal.load_state(STATE_DIR))
+        start(label, zone, time.time(), mine, journal.load_state(STATE_DIR), until=until)
         write(mine_path, mine)
         write(OUT, view(mine))
         print(f"отдано на разбор: {mine['weeks'][label].get('to')}; сводка: {mine['weeks'][label]['digest']}")
