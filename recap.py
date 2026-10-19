@@ -1,11 +1,36 @@
 """Разбор недели: что сделано, сколько это стоило владельцу, что улучшить. Чистые функции — без ящика и времени."""
 import datetime
 import glob
+import importlib.util
 import json
 import os
 import re
 import statistics
 import zoneinfo
+
+
+def _sync():
+    """hub-sync/sync.py из репо ядра (папка над пакетом core): его SECRET/redact — одна ловля секретов на хаб."""
+    core = importlib.util.find_spec("core")
+    path = os.path.join(os.path.dirname(os.path.dirname(core.origin)), "hub-sync", "sync.py")
+    spec = importlib.util.spec_from_file_location("hub_sync_for_recap", path)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+redact = _sync().redact
+
+
+def clean(x):
+    """Строки события без секретов — до сводки, черновика и отчёта (16.10 токен бота из сообщения попал в digest W42)."""
+    if isinstance(x, str):
+        return redact(x)
+    if isinstance(x, dict):
+        return {k: clean(v) for k, v in x.items()}
+    if isinstance(x, list):
+        return [clean(v) for v in x]
+    return x
 
 OWNER_CHANNELS = ("web", "telegram", "cli")
 FORM = "AskUserQuestion"
@@ -119,7 +144,7 @@ def events(paths, start, end):
                     continue
                 ts, seq = e.get("ts") or 0, e.get("seq")
                 if start <= ts < end and seq is not None and e.get("type") != "core.snapshot":
-                    out[seq] = e
+                    out[seq] = {**e, "data": clean(e.get("data") or {})}
     return [out[s] for s in sorted(out)]
 
 
@@ -156,7 +181,7 @@ def other_hubs(root, start, end, me):
                     if e.get("type") == "hub.where":
                         where.update({f"{k}@{host}": v for k, v in (e.get("data") or {}).items()})
                     elif start <= (e.get("ts") or 0) < end and e.get("seq") is not None:
-                        evs.append(_theirs(e, host))
+                        evs.append(_theirs({**e, "data": clean(e.get("data") or {})}, host))
     return evs, where
 
 

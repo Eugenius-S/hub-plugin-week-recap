@@ -122,6 +122,26 @@ class Schedule(unittest.TestCase):
         got = recap.events(recap.journals(d), MON, at(2026, 10, 12, 0))
         self.assertEqual([e["seq"] for e in got], [e["seq"] for e in WEEK[1:12]])
 
+    def test_secrets_from_messages_never_reach_the_digest(self):
+        """Владелец вставил токен бота в сообщение (16.10) — сводка, работа и выгрузка другого хаба его не повторяют."""
+        fake = "1234567890:" + "AAb_c-" * 5 + "Zz9q8"   # фальшивый, по виду токен бота Telegram
+        key = "sk-ant-api03-" + "q" * 30
+        said = ev(12, at(2026, 10, 7, 10), "message.received", to="hub-core", text=f"бот: {fake}, ключ {key}", **OWNER)
+        d = journal_dir([WEEK[1:12] + [said]])
+        got = recap.events(recap.journals(d), MON, at(2026, 10, 12, 0))
+        start, end = MON, at(2026, 10, 12, 0)
+        text = recap.digest("2026-W41", start, end, recap.measure(got), ZONE) + json.dumps(got, ensure_ascii=False)
+        self.assertNotIn(fake, text)
+        self.assertNotIn(key, text)
+        self.assertIn("бот: [секрет скрыт], ключ [секрет скрыт]", text)
+        theirs = tempfile.mkdtemp()
+        os.makedirs(os.path.join(theirs, "Win"))
+        with open(os.path.join(theirs, "Win", "2026-W41.jsonl"), "w") as f:
+            f.write(json.dumps(said) + "\n")
+        evs, _ = recap.other_hubs(theirs, start, end, "Mac")
+        self.assertNotIn(fake, json.dumps(evs))
+        self.assertEqual(evs[0]["data"]["text"], "бот: [секрет скрыт], ключ [секрет скрыт]")
+
 
 class Numbers(unittest.TestCase):
     def setUp(self):
