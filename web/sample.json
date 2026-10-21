@@ -1,40 +1,40 @@
 {
-  "week": "5–11 октября",
-  "tldr": "Главное за неделю: запустили генерацию Y2K в Midjourney и собрали 14 объектов. Хаб стал стабильнее, но вы трижды переписывали одну и ту же задачу про промпты — это съело полдня.",
+  "week": "Oct 5–11",
+  "tldr": "The main thing this week: 14 illustrations for the spring campaign are finished and delivered. The hub got steadier, but you rewrote the same prompts task three times - that ate half a day.",
   "numbers": [
-    {"label": "Задач закрыто", "value": "12", "hint": "из 17 начатых"},
-    {"label": "С первого раза", "value": "7 из 12", "hint": "остальные с правками"},
-    {"label": "Работа агентов", "value": "31 ч", "hint": "пока вы занимались своим"},
-    {"label": "Токенов", "value": "48 млн", "hint": "≈ $310 по прайсу API"}
+    {"label": "Tasks closed", "value": "12", "hint": "of 17 started"},
+    {"label": "First try", "value": "7 of 12", "hint": "the rest needed edits"},
+    {"label": "Agent work", "value": "31 h", "hint": "while you did your own things"},
+    {"label": "Tokens", "value": "48M", "hint": "≈ $310 at API list prices"}
   ],
   "done": [
-    {"title": "Y2K: 14 иллюстраций в Midjourney", "where": "Генерация · Y2K", "story": "От исходника в GPT до апскейла, всё лежит в папках объектов.", "tokens": "9,2 млн", "first_try": false},
-    {"title": "Плагин Teams проверен", "where": "Хаб", "story": "Посмотрели код до установки: делает, что обещает.", "tokens": "0,4 млн", "first_try": true}
+    {"title": "Spring campaign: 14 illustrations", "where": "Illustration · Spring campaign", "story": "From the source brief to the upscale, everything is in the object folders.", "tokens": "9.2M", "first_try": false},
+    {"title": "Chat plugin reviewed", "where": "Hub", "story": "Read the code before installing: it does what it promises.", "tokens": "0.4M", "first_try": true}
   ],
   "in_progress": [
-    {"title": "Frutiger Aero: материалы", "where": "Генерация · Frutiger", "next": "Ждёт вашего выбора из 6 вариантов", "tokens": "3,1 млн"}
+    {"title": "Summer set: materials", "where": "Illustration · Summer set", "next": "Waiting for your pick from 6 options", "tokens": "3.1M"}
   ],
   "dropped": [
-    {"title": "Мини-сайт для Brila", "why": "Обсуждение стихло в среду, к нему не возвращались"}
+    {"title": "Mini-site for the launch", "why": "The discussion went quiet on Wednesday and was not returned to"}
   ],
   "tokens_by_task": [
-    {"title": "Y2K: 14 иллюстраций", "tokens": "9,2 млн", "share": 0.19},
-    {"title": "Frutiger Aero: материалы", "tokens": "3,1 млн", "share": 0.06}
+    {"title": "Spring campaign: 14 illustrations", "tokens": "9.2M", "share": 0.19},
+    {"title": "Summer set: materials", "tokens": "3.1M", "share": 0.06}
   ],
   "together": {
-    "good": ["Короткие задачи с примером результата закрывались с первого раза."],
-    "slow": ["Задачи без «готово, когда…» возвращались на доработку 2–3 раза."]
+    "good": ["Short tasks with an example of the result closed on the first try."],
+    "slow": ["Tasks without a \"done when...\" came back for rework 2–3 times."]
   },
   "tips": [
-    {"tip": "Пишите, как выглядит готово", "example": "«Сделай промпты для Frutiger» ушло на три круга.", "try": "«Промпты для 5 объектов, как у Y2K Box, готово — когда я выбрал в Фигме»."}
+    {"tip": "Write what done looks like", "example": "\"Make prompts for the summer set\" took three rounds.", "try": "\"Prompts for 5 objects, like the spring box, done when I have picked in the design tool\"."}
   ],
   "todo": {
     "filed": [
-      {"title": "Обложки для блога, октябрь", "source": "Jira", "link": "https://example.atlassian.net/browse/ICN-1", "due": "до пятницы"},
-      {"title": "Ответить Ане про лендинг", "source": "Teams", "link": "", "due": ""}
+      {"title": "Blog covers, October", "source": "Jira", "link": "https://example.atlassian.net/browse/PRJ-1", "due": "by Friday"},
+      {"title": "Reply to Sam about the landing page", "source": "Teams", "link": "", "due": ""}
     ],
     "not_filed": [
-      {"title": "Обсудили на созвоне ретро-пак иконок, задачи нет", "source": "Granola", "why": "договорились на встрече 9 октября"}
+      {"title": "Discussed an icon retro pack on a call, no task yet", "source": "Granola", "why": "agreed at the meeting on October 9"}
     ]
   }
 }
