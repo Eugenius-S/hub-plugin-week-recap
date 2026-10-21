@@ -531,6 +531,25 @@ class Day(unittest.TestCase):
         for part in ("DSN", "/r.json", "/o.md", "Jira", "No ids", "in English"):
             self.assertIn(part, text)
         self.assertIn("in Russian", recap.day_prompt("2026-10-21", "/o.md", "/r.json", None, "ru"))
+
+    def test_prompt_reads_granola_and_teams_read_only(self):
+        text = recap.day_prompt("2026-10-21", "/o.md", "/r.json", None)
+        for part in ("MCP granola", "list_meetings", "get_meetings", "get-calendar-view", "list-chats", "list-chat-messages",
+                     "hub feed teams", "isCancelled", "read only", "Yesterday at meetings", "Waiting for you",
+                     "nothing found - no block", 'hub tools request granola "daily recap"', 'hub tools request ms365 "daily recap"',
+                     "since 2026-10-20 until now"):
+            self.assertIn(part, text)
+        self.assertNotRegex(text, "send-chat-message|reply-to|create-")
+
+    def test_prompt_jira_only_open_sprints(self):
+        text = recap.day_prompt("2026-10-21", "/o.md", "/r.json", {"url": "https://j", "projects": ["DSN"]})
+        self.assertIn("sprint in openSprints()", text)
+        self.assertIn("Tasks with no sprint (the backlog) and old ones - do not mention at all", text)
+
+    def test_meetings_start_from_friday_on_monday(self):
+        self.assertIn("since 2026-10-16 until now", recap.day_prompt("2026-10-19", "/o.md", "/r.json", None))   # Monday
+        self.assertIn("since 2026-10-20 until now", recap.day_prompt("2026-10-21", "/o.md", "/r.json", None))
+        self.assertIn("since yesterday until now", recap.day_prompt("bad", "/o.md", "/r.json", None))
         self.assertTrue(recap.day_valid({"text": "x"}))
         self.assertFalse(recap.day_valid({"text": " "}))
         self.assertFalse(recap.day_valid([]))
@@ -775,7 +794,7 @@ class Language(unittest.TestCase):
         for key in ("description", "why"):
             self.assertNotRegex(man[key], CYRILLIC, key)
             self.assertRegex(man["i18n"]["ru"][key], CYRILLIC, key)
-        self.assertEqual(man["version"], "2.3.1")
+        self.assertEqual(man["version"], "2.4.0")
 
 
 def node(prog):

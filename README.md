@@ -30,11 +30,18 @@ Install: "Settings" -> "Plugins" -> week-recap. The first review is of last week
 
 ## Daily recap
 
-Every morning (9:00 local time of the machine, or at the first start of the hub after 9:00) one message arrives: everything
-in progress - on all hubs (this one and the others, if the hub-sync exchange is on), the open Jira tasks and what hangs
-with the agents and in the direction backlogs. What has hung longest goes first. No answer from the analyst in 45 minutes -
-the plugin's own text goes, without Jira. Time and zone - the post `hub post week-recap "day: 08:30 Europe/Berlin"`,
-off - `"day: off"`.
+Every morning (9:00 local time of the machine, or at the first start of the hub after 9:00) one message arrives:
+
+- **Yesterday at meetings** - first: what was decided at all of yesterday's meetings (on Monday - since Friday), from Granola.
+- **Waiting for you** - what is expected of you at today's and tomorrow's meetings: your open promises from earlier meetings
+  of the same series (Granola), the calendar and the chats of Teams, the hub's Teams feed. No such items - no block.
+- Everything in progress - on all hubs (this one and the others, if the hub-sync exchange is on), your Jira tasks in the open sprints (the backlog is not
+  mentioned) and what hangs with the agents and in the direction backlogs. What has hung longest goes first.
+
+Granola, Teams and Jira are read only (the `granola`, `ms365`, `atlassian` MCP of whoever writes the recap); if one is not
+granted, the recap asks the hub for it and says in a line that the source is not in. No answer from the analyst in 45
+minutes - the plugin's own text goes, without meetings, Teams and Jira. Time and zone - the post
+`hub post week-recap "day: 08:30 Europe/Berlin"`, off - `"day: off"`.
 
 Build the digest by hand, sending nothing: `python3 main.py --day --dry`; send it now: `python3 main.py --day` (again for
 the same day - with `--force`). Another hub's open work is `work/<machine>/open.json` in hub-sync.
