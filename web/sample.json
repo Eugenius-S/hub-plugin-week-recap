@@ -1,33 +1,34 @@
 {
   "week": "Oct 5–11",
-  "tldr": "The main thing this week: 14 illustrations for the spring campaign are finished and delivered. The hub got steadier, but you rewrote the same prompts task three times - that ate half a day.",
+  "tldr": "This week the hub and the plugins took most of the tokens, and 14 spring illustrations are done. The sharpest thing: three tasks were set without a \"done when...\" and came back for rework - about a third of the week's tokens.",
+  "insights": [
+    {"kind": "improve", "title": "Tasks without \"done when...\" were redone", "what": "\"Make prompts for the summer set\" (Tue) came back three times: 4.1M tokens, two of the three rounds were about what the result should look like.", "try": "Add the finish line to the task: \"prompts for 5 objects, like the spring box, done when I have picked in the design tool\"."},
+    {"kind": "broken", "title": "A form waited for you for four days", "what": "The question about the cover format sat from Monday to Friday; the session worked on guesses and its 1.8M tokens went to a version you did not want.", "try": "Answer forms from Telegram on the go, or say \"decide yourself\" in the task."},
+    {"kind": "unknown", "title": "The hub can hold Telegram quiet", "what": "This week 23 intermediate messages came to Telegram while you were in meetings.", "try": "Turn on \"Only important\" in the Telegram settings: a chain of work then ends with one message."}
+  ],
   "numbers": [
-    {"label": "Tasks closed", "value": "12", "hint": "of 17 started"},
+    {"label": "Items done", "value": "12", "hint": "of 17 started"},
     {"label": "First try", "value": "7 of 12", "hint": "the rest needed edits"},
     {"label": "Agent work", "value": "31 h", "hint": "while you did your own things"},
-    {"label": "Tokens", "value": "48M", "hint": "≈ $310 at API list prices"}
+    {"label": "Tokens", "value": "48M", "hint": "Mac 31M · Windows 17M"}
   ],
-  "done": [
-    {"title": "Spring campaign: 14 illustrations", "where": "Illustration · Spring campaign", "story": "From the source brief to the upscale, everything is in the object folders.", "tokens": "9.2M", "first_try": false},
-    {"title": "Chat plugin reviewed", "where": "Hub", "story": "Read the code before installing: it does what it promises.", "tokens": "0.4M", "first_try": true}
-  ],
-  "in_progress": [
-    {"title": "Summer set: materials", "where": "Illustration · Summer set", "next": "Waiting for your pick from 6 options", "tokens": "3.1M"}
-  ],
-  "dropped": [
-    {"title": "Mini-site for the launch", "why": "The discussion went quiet on Wednesday and was not returned to"}
-  ],
-  "tokens_by_task": [
-    {"title": "Spring campaign: 14 illustrations", "tokens": "9.2M", "share": 0.19},
-    {"title": "Summer set: materials", "tokens": "3.1M", "share": 0.06}
+  "themes": [
+    {"title": "The hub itself", "tokens": "14.5M", "share": 0.3, "items": [
+      {"title": "Telegram: one digest of everything waiting", "tokens": "2.1M", "state": "done", "story": "Works on both computers.", "first_try": true},
+      {"title": "Sync of chats between computers", "tokens": "1.3M", "state": "progress", "next": "Waiting for the check on Windows"}
+    ]},
+    {"title": "Plugins", "tokens": "9.6M", "share": 0.2, "items": [
+      {"title": "Weekly recap: insights and tokens per task", "tokens": "3.2M", "state": "done", "story": "Both computers in one report."}
+    ]},
+    {"title": "Videos", "tokens": "7.2M", "share": 0.15, "items": [
+      {"title": "Ad video, spring box", "tokens": "2.4M", "state": "done", "story": "From the idea to the final cut.", "first_try": false},
+      {"title": "Mini-site teaser", "tokens": "0.6M", "state": "dropped", "story": "The discussion went quiet on Wednesday and was not returned to."}
+    ]}
   ],
   "together": {
     "good": ["Short tasks with an example of the result closed on the first try."],
     "slow": ["Tasks without a \"done when...\" came back for rework 2–3 times."]
   },
-  "tips": [
-    {"tip": "Write what done looks like", "example": "\"Make prompts for the summer set\" took three rounds.", "try": "\"Prompts for 5 objects, like the spring box, done when I have picked in the design tool\"."}
-  ],
   "todo": {
     "filed": [
       {"title": "Blog covers, October", "source": "Jira", "link": "https://example.atlassian.net/browse/PRJ-1", "due": "by Friday"},

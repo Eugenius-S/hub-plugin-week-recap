@@ -28,7 +28,7 @@ import socket
 import sys
 import time
 
-from core import catalog, journal, spool, usage
+from core import catalog, journal, spool
 
 import recap
 
@@ -123,13 +123,41 @@ def where_of(state):
         hit = [p for p, v in projects.items() if isinstance(v, dict) and v.get("path")
                and cwd.startswith(os.path.realpath(os.path.expanduser(v["path"])))]
         out[name] = max(hit, key=len) if hit else name
+    for name, s in ((state or {}).get("sessions") or {}).items():   # an executor works for the topic of the session that raised it
+        if s.get("role") == "executor" and s.get("raised_by") in out:
+            out[name] = out[s["raised_by"]]
     return out
+
+
+def agents_of(state):
+    """Names of the agents (specialists) of this hub: their executors and other machines' copies are named <agent>-<what>."""
+    return {n for n, s in ((state or {}).get("sessions") or {}).items() if s.get("role") == "agent"}
 
 
 def machines():
     """Machines the hub sync knows: hub-sync/agents/*/machines/<machine>.json."""
     names = glob.glob(os.path.join(os.path.dirname(OTHERS), "agents", "*", "machines", "*.json"))
     return {os.path.basename(p)[:-5] for p in names}
+
+
+def platforms():
+    """Machine -> display name (Mac, Windows): by the folders its sessions reported (hub-sync/agents/*/machines/<machine>.json);
+    ours - by the system this plugin runs on."""
+    me = socket.gethostname()
+    out = {me: {"darwin": "Mac", "win32": "Windows"}.get(sys.platform, "Linux")}
+    for path in glob.glob(os.path.join(os.path.dirname(OTHERS), "agents", "*", "machines", "*.json")):
+        host = os.path.basename(path)[:-5]
+        if host in out or host.split(".")[0] == me.split(".")[0]:
+            continue
+        try:
+            with open(path, encoding="utf-8") as f:
+                data = json.load(f)
+        except (OSError, ValueError):
+            continue
+        named = recap.platform_of(data.get("cwd") if isinstance(data, dict) else None)
+        if named:
+            out[host] = named
+    return out
 
 
 def collect(label, zone, state_dir=STATE_DIR, home=HOME, state=None, until=None, others=None):
@@ -140,16 +168,13 @@ def collect(label, zone, state_dir=STATE_DIR, home=HOME, state=None, until=None,
     theirs, their_where = recap.other_hubs(others or OTHERS, start, end, socket.gethostname())
     evs = recap.merged(mine, theirs)
     m = recap.measure(evs)
-    try:
-        paid, _ = usage.spends(usage.facts(state_dir))
-        spent = {}
-        by_ts = {(x["session"], round(x["ts"], 3)): x["usd"] for x in paid}
-        for e in evs:
-            if e.get("type") == "turn.result":
-                spent[e["seq"]] = by_ts.get((e.get("entity"), round(e.get("ts") or 0, 3)), 0.0)
-    except Exception:   # noqa: BLE001 - no prices - tokens only
-        spent = {}
-    work = recap.items(evs, end, spent, {**where_of(state), **their_where})
+    where = {**where_of(state), **their_where}
+    where.update(recap.fold_agents({e.get("entity") for e in evs if e.get("type") == "turn.result"}, where,
+                                   agents_of(state)))
+    me = socket.gethostname()
+    work = recap.items(evs, end, where, me)
+    names = platforms()
+    got = sorted({str(e["seq"]).split(":")[0] for e in theirs})
     folder = os.path.join(home, label)
     os.makedirs(folder, exist_ok=True)
     path = os.path.join(folder, "digest.md")
@@ -157,9 +182,10 @@ def collect(label, zone, state_dir=STATE_DIR, home=HOME, state=None, until=None,
         f.write(recap.digest(label, start, end, m, zone))
     work_path = os.path.join(folder, "work.md")
     with open(work_path, "w", encoding="utf-8") as f:
-        f.write(recap.work_digest(label, start, end, work, zone, note=recap.hubs_note(
-            machines(), theirs, socket.gethostname())))
+        f.write(recap.work_digest(label, start, end, work, zone, names=names, note=recap.hubs_note(
+            machines(), theirs, me)))
     return {"start": start, "end": end, "numbers": m["numbers"], "digest": path, "work": work_path,
+            "machines": recap.machine_report(work, names, me, got, machines()),
             "draft": os.path.join(folder, "draft.json"), "final": os.path.join(folder, "recap.json"),
             "report": os.path.join(folder, "report.html"), "recap": os.path.join(folder, "recap.json")}, path
 
@@ -283,7 +309,8 @@ def writer(state):
 
 def publish(label, w, data, now, send=put):
     """The report in the designer's HTML (labels in the week's language), a copy for the link from the page, the owner gets the TL;DR and the path."""
-    data = {"week": w.get("period") or label, **data, "lang": recap.norm(w.get("lang") or _lang())}
+    data = {"week": w.get("period") or label, **data, "machines": w.get("machines") or [],
+            "lang": recap.norm(w.get("lang") or _lang())}
     with open(TEMPLATE, encoding="utf-8") as f:
         html = recap.render(f.read(), data)
     with open(w["report"], "w", encoding="utf-8") as f:
@@ -291,8 +318,11 @@ def publish(label, w, data, now, send=put):
     os.makedirs(REPORTS, exist_ok=True)
     shutil.copyfile(w["report"], os.path.join(REPORTS, f"{label}.html"))
     lang = _lang()
+    heads = [f"• {str(x.get('title') or '').strip()}" for x in (data.get("insights") or [])[:3]
+             if isinstance(x, dict) and str(x.get("title") or "").strip()]
     send("owner.notify", None, {"title": tr(lang, "title", week=data["week"]),
-                                "text": f"{str(data.get('tldr') or '').strip()}\n\n{tr(lang, 'full', path=w['report'])}",
+                                "text": "\n\n".join([str(data.get("tldr") or "").strip(), *(["\n".join(heads)] if heads else []),
+                                                     tr(lang, "full", path=w["report"])]),
                                 "source": NAME, "channel": "cli", "owner": True})
     w.update(notified=now, text=str(data.get("tldr") or ""), data=data)
 

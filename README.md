@@ -5,11 +5,13 @@ changed in the Week tab -> "Edit" (or tell the hub: `hub post week-recap "schedu
 `schedule: mon start` means the first start of the hub on that day). The Russian words for the keyword, the days
 and "start" are accepted too.
 
-- **Tasks** - your human tasks, not the agents' steps: what was done, what is in progress, what was dropped, first try or
-  with rework; Jira tasks closed during the week.
-- **Efficiency of the pair** - the share of tasks done on the first try, how much of your time went (messages, forms,
-  rework), how long you waited for a result.
-- **Recommendations** - which agents or subagents to add, what to install, in what format to give instructions.
+- **Insights** - the main part, first in the report: what you may not know about the hub, what quietly broke or hung
+  during the week, what to improve in how you set tasks and give feedback - each with an example from the week.
+- **What was done** - by themes (the hub itself, plugins, design, videos, every other project): the tokens of each
+  task and each video, first try or with rework, what was dropped. The cost is only tokens, never money.
+- **Both computers** - the work of the Mac and of Windows is in one report (the other computer's work comes through the
+  hub-sync exchange, `work/<machine>/<week>.jsonl`); the report shows which computers are covered and which sent nothing.
+- **For the week** - tasks from Jira (open ones on you), Teams (waiting for your answer) and Granola (agreed, but no task).
 
 How it works: the plugin process reads the hub journal for the week (read only) and builds a digest; the review is
 written by the `analyst` agent if there is one, otherwise by the hub. The finished review arrives in Telegram and in the
@@ -21,7 +23,7 @@ Russian report, any other - English). The report page labels, the notifications 
 Russian for a Russian hub.
 
 The plugin keeps its files in the hub state folder: `week-recap/<week>/digest.md` (the digest), `work.md` (the week's
-work by project), `draft.json` (the analyst's draft), `recap.json` (the writer's text), `report.html` (the report).
+work by project, with tokens by computer), `draft.json` (the analyst's draft), `recap.json` (the writer's text), `report.html` (the report).
 Build the digest by hand, sending nothing: `python3 main.py --week 2026-W41 --dry` (with `PYTHONPATH` pointing at the hub code).
 
 Install: "Settings" -> "Plugins" -> week-recap. The first review is of last week, right after installing.

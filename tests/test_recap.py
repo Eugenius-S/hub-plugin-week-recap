@@ -314,10 +314,11 @@ class Work(unittest.TestCase):
                ev(8, at(2026, 10, 6, 9, 31), "delegation.done", "d6"),
                ev(9, at(2026, 10, 6, 9, 40), "turn.result", "pe", tokens_in=7, tokens_out=0),
                ev(10, at(2026, 10, 9, 10), "message.received", to="gen", text="a new one", **d)]
-        work = {x["id"]: x for x in recap.items(evs, at(2026, 10, 12, 0), {2: 1.5}, {"gen": "Generation"})}
+        work = {x["id"]: x for x in recap.items(evs, at(2026, 10, 12, 0), {"gen": "Generation"}, "Mac")}
         m1 = work["m1"]
-        self.assertEqual((m1["owner_msgs"], m1["tokens"], m1["usd"], m1["where"], m1["faded"]),
-                         (3, 1510, 1.5, "Generation", True))
+        self.assertEqual((m1["owner_msgs"], m1["tokens"], m1["machines"], m1["where"], m1["faded"]),
+                         (3, 1510, {"Mac": 1510}, "Generation", True))
+        self.assertNotIn("usd", m1)
         self.assertEqual((m1["kind"], work["d6"]["kind"], work["s:gen"]["kind"]), ("discussion", "task", "own"))
         self.assertEqual((work["d6"]["tokens"], bool(work["d6"]["done"])), (300, True))
         self.assertEqual(work["s:pe"]["tokens"], 7)                     # after the delivery - its own, not the task
@@ -333,7 +334,7 @@ class Work(unittest.TestCase):
                ev(4, at(2026, 10, 6, 10), "delegation.created", session="hub-dev", context="core: watchdog",
                   **{"for": "m0", "for_session": None})]
         where = {"gen": "Generative styles", "hub-dev": "hub-dev"}
-        work = {x["id"]: x for x in recap.items(evs, at(2026, 10, 12, 0), {}, where)}
+        work = {x["id"]: x for x in recap.items(evs, at(2026, 10, 12, 0), where)}
         self.assertEqual(work["d1"]["where"], "Generative styles")
         self.assertEqual(work["d4"]["where"], "hub-dev")                    # the owner's request - by session
         theirs = recap._theirs(evs[0], "Win")
@@ -347,15 +348,63 @@ class Work(unittest.TestCase):
     def test_every_project_is_in_the_work_digest_even_a_small_one(self):
         """14.10: of 118 lines of the week the first 60 by tokens were almost all work on the hub; ads went into "the rest"."""
         work = [{"id": f"m{i}", "kind": "discussion", "session": "dev", "where": "Hub", "topic": f"edit {i}",
-                 "first": MON, "last": MON, "owner_msgs": 1, "tokens": 10_000_000, "usd": 1.0, "turns": 1,
+                 "first": MON, "last": MON, "owner_msgs": 1, "tokens": 10_000_000, "machines": {"Mac": 10_000_000}, "turns": 1,
                  "faded": False} for i in range(80)]
         work.append({"id": "d99", "kind": "task", "session": "ads-x", "where": "Ads", "topic": "tracker videos",
-                     "first": MON, "last": MON, "owner_msgs": 0, "tokens": 1000, "usd": 0.1, "turns": 2, "done": MON})
+                     "first": MON, "last": MON, "owner_msgs": 0, "tokens": 1000, "machines": {"Win": 1000}, "turns": 2, "done": MON})
         text = recap.work_digest("2026-W41", MON, at(2026, 10, 12, 0), work, ZONE)
         self.assertIn("## Ads", text)
         self.assertIn("tracker videos", text)
         self.assertLess(text.index("## Hub"), text.index("## Ads"))   # the big one is higher
         self.assertIn("the rest: ", text)                              # the big one has its tail folded
+
+    def test_agents_executors_and_other_machines_fold_into_the_agent(self):
+        where = {"gen": "Generation", "hub-dev-fix@Win": "Hub"}
+        names = {"hub-dev-fix-a", "hub-dev-b@Win", "hub-dev@Win", "gen", "hub-dev-fix@Win", "stranger-x"}
+        got = recap.fold_agents(names, where, {"hub-dev", "writer"})
+        self.assertEqual(got, {"hub-dev-fix-a": "hub-dev", "hub-dev-b@Win": "hub-dev"})   # known ones and non-agents stay
+        state = {"sessions": {"gen": {"role": "agent", "cwd": "/p/gen"}, "hub-dev": {"role": "agent", "cwd": "/x"},
+                              "fix": {"role": "executor", "raised_by": "gen", "cwd": "/w/fix"}}}
+        with mock.patch.object(main.catalog, "load_config", return_value={"projects": {"Generation": {"path": "/p"}}}):
+            self.assertEqual(main.where_of(state)["fix"], "Generation")        # an executor works for its parent's topic
+        self.assertEqual(main.agents_of(state), {"gen", "hub-dev"})
+
+    def test_the_report_says_which_computers_it_covers(self):
+        work = [{"tokens": 6_000_000, "machines": {"Mac": 6_000_000}},
+                {"tokens": 4_000_000, "machines": {"Win": 3_000_000, "Mac": 1_000_000}}]
+        names = {"Mac": "Mac", "Win": "Windows"}
+        rep = recap.machine_report(work, names, "Mac", ["Win"], {"Mac", "Win", "Home.local"})
+        self.assertEqual(rep[:2], [{"name": "Mac", "tokens": "7.0M", "share": 0.7},
+                                   {"name": "Windows", "tokens": "3.0M", "share": 0.3}])
+        self.assertEqual(rep[2], {"name": "Home", "missing": True})              # a machine of the sync that sent nothing
+        self.assertEqual(len(rep), 3)
+        self.assertEqual(recap.machine_report(work, names, "Mac.local", [], {"Mac"}), [
+            {"name": "Mac", "tokens": "0k", "share": 0.0}])                         # no other machines - nobody is "missing"
+        self.assertEqual([recap.platform_of(p) for p in ("D:\\work", "/Users/x", "/home/x", "~/x", None)],
+                         ["Windows", "Mac", "Linux", None, None])
+
+    def test_the_work_digest_has_tokens_by_computer_and_no_money(self):
+        work = [{"id": "m1", "kind": "discussion", "session": "a", "where": "Plugins", "topic": "recap", "first": MON,
+                 "last": MON, "owner_msgs": 2, "tokens": 3_000_000, "machines": {"Mac": 1_000_000, "Win": 2_000_000},
+                 "turns": 4, "faded": False}]
+        text = recap.work_digest("2026-W41", MON, at(2026, 10, 12, 0), work, ZONE, names={"Mac": "Mac", "Win": "Windows"})
+        self.assertIn("Total tokens: 3.0M (Windows 2.0M · Mac 1.0M)", text)
+        self.assertIn("Windows", text.split("## Plugins")[1])
+        self.assertNotRegex(text, r"\$|usd|USD")
+
+    def test_nothing_the_model_or_the_owner_reads_mentions_money(self):
+        texts = [recap.prompt("2026-W41", "Oct 5–9", "/d.md", "/w.md", "/draft.json", "/sample.json", lang)
+                 for lang in ("en", "ru")]
+        texts += [recap.writer_prompt("2026-W41", "/d.json", "/f.json", lang) for lang in ("en", "ru")]
+        texts += [recap.hubs_note({"Win"}, [], "Mac"), recap.hubs_note(set(), [{"seq": "Win:1"}], "Mac"),
+                  read("web", "sample.json"), read("README.md"),
+                  read("hub-plugin.json"), json.dumps(main.STR, ensure_ascii=False)]
+        for text in texts:
+            self.assertNotRegex(text, r"\$|(?i:usd|dollar|list prices|API prices)")
+        self.assertNotRegex(read("web", "report-template.html"), r"\$\d|(?i:usd|dollar|prices)")   # `$` is JS there
+        self.assertIn("tokens", texts[0])
+        self.assertIn("insights", texts[0])
+        self.assertIn("Mac and Windows", texts[0])
 
     def test_the_period_may_end_before_sunday(self):
         start, end, label = recap.week_of("2026-W41", ZONE, "2026-10-09")
@@ -381,10 +430,12 @@ class Work(unittest.TestCase):
         self.assertEqual(where, {"ads@Win": "Ads"})
         mine = [ev(2, at(2026, 10, 6, 9), "delegation.created", session="analyst", context="own", **{"for": None}),
                 ev(9, at(2026, 10, 6, 12), "turn.result", "analyst", tokens_in=5, tokens_out=0)]
-        work = {x["id"]: x for x in recap.items(recap.merged(mine, evs), at(2026, 10, 12, 0), {}, where)}
+        work = {x["id"]: x for x in recap.items(recap.merged(mine, evs), at(2026, 10, 12, 0), where, "Mac")}
         self.assertEqual((work["mWin:1"]["where"], work["mWin:1"]["topic"]), ("Ads", "tracker video"))
         self.assertEqual((work["dWin:2"]["tokens"], bool(work["dWin:2"]["done"])), (700, True))
         self.assertEqual((work["d2"]["tokens"], work["d2"]["done"]), (5, None))   # the analyst's own task - ours
+        self.assertEqual((work["dWin:2"]["machines"], work["d2"]["machines"]), ({"Win": 700}, {"Mac": 5}))   # tokens by computer
+        self.assertEqual(recap.machine_tokens(work.values()), {"Win": 700, "Mac": 5})
         self.assertNotIn("next week", json.dumps(evs, ensure_ascii=False))
         self.assertEqual(recap.measure(recap.merged(mine, evs))["numbers"]["owner_messages"], 1)
         self.assertEqual(recap.other_hubs(d, MON, at(2026, 10, 12, 0), "Win"), ([], {}))   # our own file is not another's
@@ -713,7 +764,7 @@ class Language(unittest.TestCase):
                ev(4, at(2026, 10, 6, 12), "permission.requested", "pe", request_id="r", tool="AskUserQuestion",
                   input={"questions": [{"question": "Which size?"}]})]
         end = at(2026, 10, 12, 0)
-        work = recap.items(evs, end, {}, {"gen": "Banners"})
+        work = recap.items(evs, end, {"gen": "Banners"})
         self.assertNotRegex(recap.work_digest("2026-W41", MON, end, work, ZONE, note=recap.hubs_note({"Old"}, [], "Mac")),
                             CYRILLIC)
         self.assertNotRegex(recap.digest("2026-W41", MON, end, recap.measure(evs), ZONE), CYRILLIC)
@@ -723,7 +774,7 @@ class Language(unittest.TestCase):
         for key in ("description", "why"):
             self.assertNotRegex(man[key], CYRILLIC, key)
             self.assertRegex(man["i18n"]["ru"][key], CYRILLIC, key)
-        self.assertEqual(man["version"], "2.2.0")
+        self.assertEqual(man["version"], "2.3.0")
 
 
 def node(prog):
@@ -820,7 +871,7 @@ class Template(unittest.TestCase):
         self.assertIn("d.lang", html)
         self.assertIn("document.documentElement.lang = lang", html)
         self.assertEqual(json.loads(re.search(r'<script id="recap-data" type="application/json">(.*?)</script>', html, re.S)[1])
-                         ["tldr"][:8], "The main")
+                         ["tldr"][:9], "This week")
 
     def test_the_sample_is_the_embedded_sample(self):
         html = read("web", "report-template.html")

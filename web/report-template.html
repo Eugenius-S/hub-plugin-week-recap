@@ -18,6 +18,8 @@
     --good-bg: oklch(94% 0.04 150);
     --slow: oklch(55% 0.13 60);
     --slow-bg: oklch(94.5% 0.045 75);
+    --broken: oklch(52% 0.16 25);
+    --broken-bg: oklch(94.5% 0.04 25);
     --bar: oklch(52% 0.13 255);
     --bar-track: oklch(92% 0.012 80);
 
@@ -40,6 +42,8 @@
       --good-bg: oklch(30% 0.05 150);
       --slow: oklch(80% 0.12 70);
       --slow-bg: oklch(31% 0.05 70);
+      --broken: oklch(78% 0.12 25);
+      --broken-bg: oklch(31% 0.05 25);
       --bar: oklch(72% 0.11 255);
       --bar-track: oklch(29% 0.008 70);
     }
@@ -107,6 +111,32 @@
   .next b { color: var(--ink); font-weight: 600; }
   .dropped .title { color: var(--ink-2); }
 
+  /* insights */
+  .insight { padding: var(--s5); border-radius: var(--r); background: var(--surface); }
+  .insight + .insight { margin-top: var(--s4); }
+  .insight .title { font: 600 19px/1.35 var(--serif); margin-top: var(--s3); }
+  .insight .tag { background: var(--slow-bg); color: var(--slow); }
+  .insight.unknown .tag { background: var(--good-bg); color: var(--good); }
+  .insight.broken .tag { background: var(--broken-bg); color: var(--broken); }
+  .insight p.what { margin: var(--s2) 0 0; color: var(--ink-2); }
+  .insight p.try { margin: var(--s3) 0 0; }
+  .insight p.try b { font-weight: 600; }
+
+  /* computers */
+  .machines { list-style: none; display: flex; flex-wrap: wrap; gap: var(--s2); margin: var(--s5) 0 0; padding: 0; }
+  .machines li { padding: 3px 12px; border-radius: 999px; background: var(--surface); color: var(--ink-2); font-size: 14px; font-variant-numeric: tabular-nums; }
+  .machines li.missing { background: var(--slow-bg); color: var(--slow); }
+
+  /* themes */
+  .theme + .theme { margin-top: var(--s7); }
+  .theme > header { margin-bottom: var(--s4); }
+  .theme .line { display: flex; justify-content: space-between; gap: var(--s4); align-items: baseline; }
+  .theme h3 { margin: 0; font: 600 18px/1.35 var(--serif); }
+  .theme .val { color: var(--ink-2); font-size: 15px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .tag.progress { background: var(--surface); color: var(--ink-2); }
+  .tag.dropped { background: var(--surface); color: var(--ink-3); }
+  .items > li.dropped .title { color: var(--ink-2); }
+
   /* tokens */
   .tokens .line { display: flex; justify-content: space-between; gap: var(--s4); align-items: baseline; }
   .tokens .val { color: var(--ink-2); font-size: 15px; font-variant-numeric: tabular-nums; white-space: nowrap; }
@@ -121,16 +151,6 @@
   .together .slow { --dot: var(--slow); }
   .together ul { margin: 0; padding: 0 0 0 1.1em; color: var(--ink-2); }
   .together li + li { margin-top: var(--s2); }
-
-  /* tips */
-  .tip { padding: var(--s5); border-radius: var(--r); background: var(--surface); }
-  .tip + .tip { margin-top: var(--s4); }
-  .tip .title { font: 600 19px/1.35 var(--serif); }
-  .tip dl { margin: var(--s4) 0 0; }
-  .tip dd + dt { margin-top: var(--s4); }
-  .tip dt { color: var(--ink-3); font-size: 13px; letter-spacing: .02em; }
-  .tip dd { margin: 2px 0 0; color: var(--ink-2); }
-  .tip dd.try { color: var(--ink); }
 
   /* todo */
   .sub { margin: 0 0 var(--s3); color: var(--ink-3); font-size: 14px; }
@@ -157,12 +177,12 @@
     .numbers { grid-template-columns: 1fr 1fr; }
     .numbers dd { font-size: 26px; }
     .together { grid-template-columns: 1fr; }
-    .tip { padding: var(--s4); }
-    .done .row { flex-direction: column; gap: var(--s2); }
+    .insight { padding: var(--s4); }
+    .theme .row { flex-direction: column; gap: var(--s2); }
   }
   @media print {
     body { background: #fff; }
-    .tip { border: 1px solid var(--line); background: none; }
+    .insight { border: 1px solid var(--line); background: none; }
   }
 </style>
 </head>
@@ -187,28 +207,19 @@
     <p class="tldr" id="tldr"></p>
   </header>
 
+  <section id="s-insights">
+    <h2><svg class="ic"><use href="#i-tips"/></svg><span data-t="insights">Insights</span></h2>
+    <div id="insights"></div>
+  </section>
+
   <section id="s-numbers" aria-label="Numbers of the week" data-t-aria="numbers_aria">
     <dl class="numbers" id="numbers"></dl>
+    <ul class="machines" id="machines" data-t-aria="machines_aria"></ul>
   </section>
 
-  <section id="s-done" class="done">
-    <h2><svg class="ic"><use href="#i-done"/></svg><span data-t="done">Done</span><span class="count"></span></h2>
-    <ul class="items" id="done"></ul>
-  </section>
-
-  <section id="s-progress">
-    <h2><svg class="ic"><use href="#i-progress"/></svg><span data-t="progress">In progress</span><span class="count"></span></h2>
-    <ul class="items" id="progress"></ul>
-  </section>
-
-  <section id="s-dropped" class="dropped">
-    <h2><svg class="ic"><use href="#i-dropped"/></svg><span data-t="dropped">Dropped</span><span class="count"></span></h2>
-    <ul class="items" id="dropped"></ul>
-  </section>
-
-  <section id="s-tokens" class="tokens">
-    <h2><svg class="ic"><use href="#i-tokens"/></svg><span data-t="tokens">Where the tokens went</span></h2>
-    <ul class="items" id="tokens"></ul>
+  <section id="s-themes">
+    <h2><svg class="ic"><use href="#i-done"/></svg><span data-t="themes">What was done</span></h2>
+    <div id="themes"></div>
   </section>
 
   <section id="s-together">
@@ -217,11 +228,6 @@
       <div class="good" id="good-box"><h3 data-t="good">Went easily</h3><ul id="good"></ul></div>
       <div class="slow" id="slow-box"><h3 data-t="slow">Slowed down</h3><ul id="slow"></ul></div>
     </div>
-  </section>
-
-  <section id="s-tips">
-    <h2><svg class="ic"><use href="#i-tips"/></svg><span data-t="tips">What to try</span></h2>
-    <div id="tips"></div>
   </section>
 
   <section id="s-todo" class="todo">
@@ -236,34 +242,35 @@
 <script id="recap-data" type="application/json">
 {
   "week": "Oct 5–11",
-  "tldr": "The main thing this week: 14 illustrations for the spring campaign are finished and delivered. The hub got steadier, but you rewrote the same prompts task three times - that ate half a day.",
+  "tldr": "This week the hub and the plugins took most of the tokens, and 14 spring illustrations are done. The sharpest thing: three tasks were set without a \"done when...\" and came back for rework - about a third of the week's tokens.",
+  "insights": [
+    {"kind": "improve", "title": "Tasks without \"done when...\" were redone", "what": "\"Make prompts for the summer set\" (Tue) came back three times: 4.1M tokens, two of the three rounds were about what the result should look like.", "try": "Add the finish line to the task: \"prompts for 5 objects, like the spring box, done when I have picked in the design tool\"."},
+    {"kind": "broken", "title": "A form waited for you for four days", "what": "The question about the cover format sat from Monday to Friday; the session worked on guesses and its 1.8M tokens went to a version you did not want.", "try": "Answer forms from Telegram on the go, or say \"decide yourself\" in the task."},
+    {"kind": "unknown", "title": "The hub can hold Telegram quiet", "what": "This week 23 intermediate messages came to Telegram while you were in meetings.", "try": "Turn on \"Only important\" in the Telegram settings: a chain of work then ends with one message."}
+  ],
   "numbers": [
-    {"label": "Tasks closed", "value": "12", "hint": "of 17 started"},
+    {"label": "Items done", "value": "12", "hint": "of 17 started"},
     {"label": "First try", "value": "7 of 12", "hint": "the rest needed edits"},
     {"label": "Agent work", "value": "31 h", "hint": "while you did your own things"},
-    {"label": "Tokens", "value": "48M", "hint": "≈ $310 at API list prices"}
+    {"label": "Tokens", "value": "48M", "hint": "Mac 31M · Windows 17M"}
   ],
-  "done": [
-    {"title": "Spring campaign: 14 illustrations", "where": "Illustration · Spring campaign", "story": "From the source brief to the upscale, everything is in the object folders.", "tokens": "9.2M", "first_try": false},
-    {"title": "Chat plugin reviewed", "where": "Hub", "story": "Read the code before installing: it does what it promises.", "tokens": "0.4M", "first_try": true}
-  ],
-  "in_progress": [
-    {"title": "Summer set: materials", "where": "Illustration · Summer set", "next": "Waiting for your pick from 6 options", "tokens": "3.1M"}
-  ],
-  "dropped": [
-    {"title": "Mini-site for the launch", "why": "The discussion went quiet on Wednesday and was not returned to"}
-  ],
-  "tokens_by_task": [
-    {"title": "Spring campaign: 14 illustrations", "tokens": "9.2M", "share": 0.19},
-    {"title": "Summer set: materials", "tokens": "3.1M", "share": 0.06}
+  "themes": [
+    {"title": "The hub itself", "tokens": "14.5M", "share": 0.3, "items": [
+      {"title": "Telegram: one digest of everything waiting", "tokens": "2.1M", "state": "done", "story": "Works on both computers.", "first_try": true},
+      {"title": "Sync of chats between computers", "tokens": "1.3M", "state": "progress", "next": "Waiting for the check on Windows"}
+    ]},
+    {"title": "Plugins", "tokens": "9.6M", "share": 0.2, "items": [
+      {"title": "Weekly recap: insights and tokens per task", "tokens": "3.2M", "state": "done", "story": "Both computers in one report."}
+    ]},
+    {"title": "Videos", "tokens": "7.2M", "share": 0.15, "items": [
+      {"title": "Ad video, spring box", "tokens": "2.4M", "state": "done", "story": "From the idea to the final cut.", "first_try": false},
+      {"title": "Mini-site teaser", "tokens": "0.6M", "state": "dropped", "story": "The discussion went quiet on Wednesday and was not returned to."}
+    ]}
   ],
   "together": {
     "good": ["Short tasks with an example of the result closed on the first try."],
     "slow": ["Tasks without a \"done when...\" came back for rework 2–3 times."]
   },
-  "tips": [
-    {"tip": "Write what done looks like", "example": "\"Make prompts for the summer set\" took three rounds.", "try": "\"Prompts for 5 objects, like the spring box, done when I have picked in the design tool\"."}
-  ],
   "todo": {
     "filed": [
       {"title": "Blog covers, October", "source": "Jira", "link": "https://example.atlassian.net/browse/PRJ-1", "due": "by Friday"},
@@ -285,19 +292,23 @@
   const STR = {
     en: {
       title: "Week", your_week: "Your week", week: "Week {week}", numbers_aria: "Numbers of the week",
-      done: "Done", progress: "In progress", dropped: "Dropped", tokens: "Where the tokens went",
-      together: "How we worked together", good: "Went easily", slow: "Slowed down", tips: "What to try",
+      insights: "Insights", themes: "What was done", machines_aria: "Computers in this report",
+      k_unknown: "You may not know", k_improve: "Worth improving", k_broken: "Quietly broke", try_now: "Try: ",
+      st_done: "done", st_progress: "in progress", st_dropped: "dropped", no_export: "{name}: no work received",
+      together: "How we worked together", good: "Went easily", slow: "Slowed down",
       todo: "For this week", filed: "Already filed", notfiled: "Discussed, but no task",
       tokens_n: "{n} tokens", first_try: "first try", next: "Next: ", bar_aria: "{pct}% of the week's tokens",
-      was: "How it went this week", try: "How to try", open: "Open",
+      open: "Open",
     },
     ru: {
       title: "Неделя", your_week: "Ваша неделя", week: "Неделя {week}", numbers_aria: "Цифры недели",
-      done: "Сделано", progress: "В работе", dropped: "Брошено", tokens: "Куда ушли токены",
-      together: "Как работали вместе", good: "Шло легко", slow: "Тормозило", tips: "Что попробовать",
+      insights: "Инсайты", themes: "Что сделано", machines_aria: "Компьютеры в этом отчёте",
+      k_unknown: "Возможно, вы не знали", k_improve: "Стоит улучшить", k_broken: "Тихо ломалось", try_now: "Попробовать: ",
+      st_done: "сделано", st_progress: "в работе", st_dropped: "брошено", no_export: "{name}: работа не пришла",
+      together: "Как работали вместе", good: "Шло легко", slow: "Тормозило",
       todo: "На эту неделю", filed: "Уже заведено", notfiled: "Обсуждали, но задачи нет",
       tokens_n: "{n} токенов", first_try: "с первого раза", next: "Дальше: ", bar_aria: "{pct}% токенов недели",
-      was: "Как было на этой неделе", try: "Как попробовать", open: "Открыть",
+      open: "Открыть",
     },
   };
   const base = String(d.lang || "en").split("-")[0].toLowerCase();
@@ -354,56 +365,58 @@
   });
   show("s-numbers", nums.length);
 
-  // done
-  const done = list(d.done);
-  done.forEach((x) => {
-    const li = el("li"), row = el("div", "row"), body = el("div");
-    add(body, el("p", "title", text(x.title)), meta(x.where, x.tokens && t("tokens_n", { n: x.tokens })),
-        text(x.story) && el("p", "story", text(x.story)));
-    let tag = null;
-    if (x.first_try) { tag = el("span", "tag good"); tag.append(icon("i-check", "sm"), t("first_try")); }
-    add(row, body, tag);
-    li.append(row);
-    $("done").append(li);
+  // insights
+  const kinds = { unknown: "k_unknown", improve: "k_improve", broken: "k_broken" };
+  const ins = list(d.insights).filter((x) => text(x.title));
+  ins.forEach((x) => {
+    const kind = kinds[x.kind] ? x.kind : "improve";
+    const box = el("article", "insight " + kind), tag = el("span", "tag", t(kinds[kind]));
+    add(box, tag, el("p", "title", text(x.title)), text(x.what) && el("p", "what", text(x.what)));
+    if (text(x.try)) { const p = el("p", "try"); p.append(el("b", null, t("try_now")), text(x.try)); box.append(p); }
+    $("insights").append(box);
   });
-  show("s-done", done.length); count("s-done", done.length);
+  show("s-insights", ins.length);
 
-  // in progress
-  const prog = list(d.in_progress);
-  prog.forEach((x) => {
-    const li = el("li");
-    add(li, el("p", "title", text(x.title)), meta(x.where, x.tokens && t("tokens_n", { n: x.tokens })));
-    if (text(x.next)) { const p = el("p", "next"); p.append(el("b", null, t("next")), text(x.next)); li.append(p); }
-    $("progress").append(li);
+  // computers
+  list(d.machines).filter((m) => text(m.name)).forEach((m) => {
+    const li = el("li", m.missing ? "missing" : "");
+    li.textContent = m.missing ? t("no_export", { name: text(m.name) })
+      : [text(m.name), text(m.tokens) && t("tokens_n", { n: text(m.tokens) }), Number(m.share) ? Math.round(Number(m.share) * 100) + "%" : ""].filter(Boolean).join(" · ");
+    $("machines").append(li);
   });
-  show("s-progress", prog.length); count("s-progress", prog.length);
+  show("machines", $("machines").childNodes.length);
 
-  // dropped
-  const drop = list(d.dropped);
-  drop.forEach((x) => {
-    const li = el("li");
-    add(li, el("p", "title", text(x.title)), text(x.why) && el("p", "story", text(x.why)));
-    $("dropped").append(li);
-  });
-  show("s-dropped", drop.length); count("s-dropped", drop.length);
-
-  // tokens
-  const tok = list(d.tokens_by_task);
-  tok.forEach((x) => {
-    const share = Math.max(0, Math.min(1, Number(x.share) || 0));
-    const li = el("li"), line = el("div", "line");
-    const pct = Math.round(share * 100);
-    add(line, el("p", "title", text(x.title)),
-        el("span", "val", [text(x.tokens), pct ? pct + "%" : ""].filter(Boolean).join(" · ")));
+  // themes
+  const states = { done: "st_done", progress: "st_progress", dropped: "st_dropped" };
+  const themes = list(d.themes).filter((x) => text(x.title));
+  themes.forEach((th) => {
+    const box = el("article", "theme"), head = el("header"), line = el("div", "line");
+    const share = Math.max(0, Math.min(1, Number(th.share) || 0)), pct = Math.round(share * 100);
+    add(line, el("h3", null, text(th.title)), el("span", "val", [text(th.tokens) && t("tokens_n", { n: text(th.tokens) }), pct ? pct + "%" : ""].filter(Boolean).join(" · ")));
     const bar = el("div", "bar"), fill = el("i");
     fill.style.width = (share * 100).toFixed(1) + "%";
     bar.append(fill);
     bar.setAttribute("role", "img");
     bar.setAttribute("aria-label", t("bar_aria", { pct }));
-    add(li, line, bar);
-    $("tokens").append(li);
+    add(head, line, bar);
+    const ul = el("ul", "items");
+    list(th.items).filter((x) => text(x.title)).forEach((x) => {
+      const st = states[x.state] ? x.state : "done";
+      const li = el("li", st), row = el("div", "row"), body = el("div");
+      add(body, el("p", "title", text(x.title)), meta(x.tokens && t("tokens_n", { n: text(x.tokens) })),
+          text(x.story) && el("p", "story", text(x.story)));
+      if (st === "progress" && text(x.next)) { const p = el("p", "next"); p.append(el("b", null, t("next")), text(x.next)); body.append(p); }
+      const tag = el("span", "tag " + (st === "done" && x.first_try ? "good" : st));
+      if (st === "done") tag.append(icon("i-check", "sm"));
+      tag.append(t(states[st]) + (st === "done" && x.first_try ? " · " + t("first_try") : ""));
+      add(row, body, tag);
+      li.append(row);
+      ul.append(li);
+    });
+    add(box, head, ul);
+    $("themes").append(box);
   });
-  show("s-tokens", tok.length);
+  show("s-themes", themes.length);
 
   // together
   const tg = d.together || {};
@@ -413,18 +426,6 @@
   show("good-box", good.length); show("slow-box", slow.length);
   show("s-together", good.length || slow.length);
   if (!good.length || !slow.length) document.querySelector(".together").style.gridTemplateColumns = "1fr";
-
-  // tips
-  const tips = list(d.tips).filter((x) => text(x.tip));
-  tips.forEach((x) => {
-    const box = el("article", "tip"), dl = el("dl");
-    box.append(el("p", "title", text(x.tip)));
-    if (text(x.example)) add(dl, el("dt", null, t("was")), el("dd", null, text(x.example)));
-    if (text(x.try)) add(dl, el("dt", null, t("try")), el("dd", "try", text(x.try)));
-    if (dl.childNodes.length) box.append(dl);
-    $("tips").append(box);
-  });
-  show("s-tips", tips.length);
 
   // todo
   const td = d.todo || {};

@@ -1,4 +1,4 @@
-"""Week review: what was done, what it cost the owner, what to improve. Pure functions - no spool, no clock.
+"""Week review: what was done and how many tokens it took, what the owner may not know, what to improve. Pure functions - no spool, no clock.
 
 Two kinds of text live here. What the analyst and the writer sessions read (the digests, the prompts) is always
 English; the prompt tells them which language to write the report in. What the owner reads (the "numbers only"
@@ -178,6 +178,16 @@ def events(paths, start, end):
 
 
 
+def _base(name):
+    """A session name without the hub mark of another machine: hub-dev@Win -> hub-dev."""
+    return str(name).split("@")[0]
+
+
+def _host_of(name, me):
+    """The machine a session lives on: the mark after @ (another hub), none - ours (me)."""
+    return str(name).split("@", 1)[1] if "@" in str(name) else me
+
+
 def _theirs(e, host):
     """An event of another hub - with its marks: seq, sessions, tasks and forms do not mix with ours (both have an analyst)."""
     d, ent = dict(e.get("data") or {}), e.get("entity")
@@ -218,7 +228,7 @@ def hubs_note(machines, theirs, me):
     """A line for the digest: whose work came in, whose did not. machines - the machines the sync knows (hub-sync/agents/*/machines)."""
     got = sorted({str(e["seq"]).split(":")[0] for e in theirs})
     miss = sorted({m for m in machines if m.split(".")[0] != me.split(".")[0] and m not in got})
-    parts = [f"the work of hub {h} is included (no prices - $ is only this hub's)" for h in got]
+    parts = [f"the work of hub {h} is included (its tokens are counted like this hub's)" for h in got]
     parts += [f"hub {h} did not export its work for these days - it is not included, tell the owner about it in one line"
               for h in miss]
     return ("Other hubs: " + "; ".join(parts) + ".") if parts else ""
@@ -349,9 +359,10 @@ def digest(label, start, end, m, zone):
 
 
 HUMAN = ("Write for a person, not for a system: in plain words, as a colleague tells the results of the week. Their "
-         "tasks and results (illustrations, ads, texts, meetings), not the hub's internals: no commits, branches, "
-         "tests, sessions, restarts, ids like mN/dN/qN, paths or model names. Work on the hub itself - one line "
-         "\"hub: what became more convenient\", only if the owner asked for it. Numbers - round and clear.")
+         "tasks and results (illustrations, ads, videos, texts, plugins, the hub itself), what became possible - not "
+         "commits, branches, tests, ids like mN/dN/qN, paths or model names. Numbers - round and clear. Money is "
+         "never mentioned: no currencies and no prices - the cost of work is only tokens (\"9.2M "
+         "tokens\"), at every task and every item.")
 
 # English names of the report languages for the prompts (the plugin has tables for these two only)
 LANGUAGE = {"en": "English", "ru": "Russian"}
@@ -366,28 +377,40 @@ def prompt(label, period, digest_path, work_path, draft_path, sample_path, lang=
     """The assignment for whoever reviews the week (analyst, no analyst - the hub): the recap draft and the todo as JSON like the sample."""
     return (
         f"[week-recap] Weekly recap {label} ({period}) for the owner. Material from the hub journal: the week's work "
-        f"with tokens - `{work_path}`, the owner's words, tasks and questions in time order - `{digest_path}`. The "
-        "frame is all of their work for the week, not only your area.\n"
-        "1. What was done, what is in progress, what was dropped: merge discussions and tasks into the owner's human "
-        "tasks (one goal - one task). Every project from work.md (a ## section) goes into the report, at least as a "
-        "line; big ones - by task. A discussion that \"went quiet\" - decide by meaning: done (there was a result) or "
-        "dropped. First try or with corrections. A task's tokens are the sum of its lines.\n"
-        "The hub is only work on the hub itself (the page, Telegram, the core, sync between two computers). Creating "
-        "and setting up an agent, skill, script or plugin for a specific topic belongs to the topic it serves, and its "
-        "tokens too: an animator - to animation, a prompt engineer and an image-generation script - to generative "
-        "styles. Topic shares in the TL;DR and in tokens - after such reassignment.\n"
-        "2. Jira (MCP atlassian), Granola (MCP granola), Teams (MCP ms365) - read only: what was closed this week, "
+        f"with tokens, from all the owner's computers (Mac and Windows together) - `{work_path}`, the owner's words, "
+        f"tasks and questions in time order - `{digest_path}`. The frame is all of their work for the week, not only "
+        "your area. The cost of work is tokens only: money and prices appear nowhere in your result.\n"
+        "1. The main part - insights about working with the hub (the `insights` list, 3-6 items, the sharpest first). "
+        "What the owner may not know: hub abilities they do not use, and what quietly broke or hung this week (tasks "
+        "not delivered, a session or a form that waited for days, work that went quiet, two computers that did not "
+        "agree). What to improve critically in their own feedback and way of setting tasks: where they set a task "
+        "unclearly and then redid it, repeated one request, answered a form late, gave no \"done when...\"; and in "
+        "how the hub and agents worked for them. Each insight: kind (unknown / improve / broken), a title in one "
+        "line, what exactly happened with a concrete example from this week (the date, the task, the tokens it "
+        "cost), and what to do next (`try`). No general advice without an example. You may check the facts with "
+        "`hub status`, `hub task show dN`, `hub coach`.\n"
+        "2. What was done, by themes (the `themes` list): merge discussions and tasks into the owner's human tasks "
+        "(one goal - one item) and group them by topic: work on the hub itself (the page, Telegram, the core, sync "
+        "between computers), plugins that were developed, Hub Design and the designer, videos, and every other "
+        "project from work.md (a ## section; none is dropped, a small one - a line). Every item has its own tokens - "
+        "each video, each plugin, each task: the sum of its lines of work.md, from both computers. A theme's tokens "
+        "and share are the sum of its items. State of an item: done / progress / dropped (a discussion that went quiet "
+        "- decide by meaning). Done - first try or with corrections. Creating and setting up an agent, skill, script "
+        "or plugin for a specific topic belongs to the topic it serves, and its tokens too: an animator - to "
+        "animation, a prompt engineer and an image-generation script - to generative styles; a plugin for the hub "
+        "page - to plugins.\n"
+        "3. Jira (MCP atlassian), Granola (MCP granola), Teams (MCP ms365) - read only: what was closed this week, "
         "what was agreed in meetings, what was asked in Teams. No access to something - "
         "`hub tools request <id> \"weekly recap\"` and a line in together.slow saying the source was not included.\n"
-        "3. How you worked together: where the pair went easily and where it slowed down (unclear input, rework, "
-        "waiting for the owner) - with examples from the week. 3-5 tips: how to give input better, with an example "
-        "from the week and how to try it.\n"
-        "4. Todo for this week: filed (Jira - open ones on the owner, Teams - waiting for their answer) and not filed "
+        "4. How you worked together: where the pair went easily and where it slowed down - short, with examples "
+        "(the details go to insights).\n"
+        "5. Todo for this week: filed (Jira - open ones on the owner, Teams - waiting for their answer) and not filed "
         "(agreed at a meeting in Granola or in a chat, but there is no task).\n"
         f"{HUMAN}\n{_write_in(lang)}\n"
         f"The result is the file `{draft_path}`: JSON like `{sample_path}` (the same keys; an empty section - an empty "
-        "list). numbers - 4 tiles: tasks done, first try, hours of agent work, tokens. The result of your turn is one "
-        "line: \"done\".")
+        "list; do not write `machines` - the plugin adds which computers are covered). numbers - 4 tiles: items done, "
+        "first try, hours of agent work, tokens (the hint of the tokens tile - how they split between computers). The "
+        "result of your turn is one line: \"done\".")
 
 
 def writer_prompt(label, draft_path, final_path, lang="en"):
@@ -395,7 +418,8 @@ def writer_prompt(label, draft_path, final_path, lang="en"):
     return (
         f"[week-recap] Weekly recap {label} for the owner: rewrite the texts of the draft `{draft_path}` so that it is "
         "pleasant and quick to read. Do not change the meaning, facts and numbers; nor the JSON structure and keys; "
-        "leave links and sources as they are. Remove the internal and technical things they do not need. "
+        "the insights keep their examples and their sharpness - do not soften or generalize them; the tokens of every "
+        "item stay. Leave links and sources as they are. Remove the internal and technical things they do not need. "
         f"{HUMAN}\n{_write_in(lang)}\n"
         f"The result is the file `{final_path}`, the same JSON. The result of your turn is one line: \"done\".")
 
@@ -413,7 +437,7 @@ def valid(data):
     """The draft looks like a recap: a dict with a TL;DR and sections that are lists."""
     if not isinstance(data, dict) or not str(data.get("tldr") or "").strip():
         return False
-    lists = ("numbers", "done", "in_progress", "dropped", "tokens_by_task", "tips")
+    lists = ("numbers", "insights", "themes")
     return all(isinstance(data.get(k, []), list) for k in lists) and isinstance(data.get("todo", {}), dict)
 
 
@@ -435,13 +459,15 @@ def tokens(d):
     return int(d.get("tokens_in") or 0) + int(d.get("tokens_out") or 0)
 
 
-def items(evs, end, spent=None, where=None):
+def items(evs, end, where=None, me="this"):
     """The week's work in human terms: the owner's discussions with a session (their messages in a row, gaps shorter
     than THREAD_GAP) and tasks dN. Every turn of a session goes to the task it leads (the last open one), otherwise to
-    its last discussion; tokens and price (spent: turn seq -> usd) go there too. A discussion where the owner wrote at
-    least LIVELY times and then fell silent for longer than FADED before the week's end "went quiet": the reviewer
-    decides (done or dropped). Kinds: "discussion", "task", "own"."""
-    spent, where = spent or {}, where or {}
+    its last discussion; its tokens go there too, and "machines" - the same tokens by the computer the turn ran on
+    (me - the name of ours; sessions of another hub carry @<machine>). A discussion where the owner wrote at least
+    LIVELY times and then fell silent for longer than FADED before the week's end "went quiet": the reviewer decides
+    (done or dropped). Kinds: "discussion", "task", "own"."""
+    where = where or {}
+    topic = lambda s: where.get(s) or _base(s)   # noqa: E731
     out, last_thread, open_tasks, own = [], {}, {}, {}
     for e in evs:
         t, d, ent, ts = e.get("type"), e.get("data") or {}, e.get("entity"), e.get("ts") or 0
@@ -450,9 +476,9 @@ def items(evs, end, spent=None, where=None):
             s = d["to"]
             th = last_thread.get(s)
             if not th or ts - th["last"] > THREAD_GAP:
-                th = {"id": f"m{e['seq']}", "kind": "discussion", "session": s, "where": where.get(s) or s,
+                th = {"id": f"m{e['seq']}", "kind": "discussion", "session": s, "where": topic(s),
                       "topic": str(d.get("text") or ""), "first": ts, "last": ts, "owner_msgs": 0,
-                      "tokens": 0, "usd": 0.0, "turns": 0}
+                      "tokens": 0, "machines": {}, "turns": 0}
                 last_thread[s] = th
                 out.append(th)
             th["owner_msgs"] += 1
@@ -461,10 +487,9 @@ def items(evs, end, spent=None, where=None):
             s = d["session"]
             # the task was set by a working session (a direction asked for a script, an agent) - tokens go to its topic, not to the hub
             by = d.get("for_session")
-            task = {"id": f"d{e['seq']}", "kind": "task", "session": s,
-                    "where": (where.get(by) or by) if by else (where.get(s) or s),
+            task = {"id": f"d{e['seq']}", "kind": "task", "session": s, "where": topic(by) if by else topic(s),
                     "topic": str(d.get("context") or ""), "first": ts, "last": ts, "owner_msgs": 0,
-                    "tokens": 0, "usd": 0.0, "turns": 0, "done": None, "for": d.get("for")}
+                    "tokens": 0, "machines": {}, "turns": 0, "done": None, "for": d.get("for")}
             open_tasks.setdefault(s, []).append(task)
             out.append(task)
         elif t == "delegation.done":
@@ -477,48 +502,104 @@ def items(evs, end, spent=None, where=None):
         elif t == "turn.result" and ent:
             box = (open_tasks.get(ent) or [None])[-1] or last_thread.get(ent) or own.get(ent)
             if not box:   # a turn without an owner's request this week - the session's own (schedule, watchdog)
-                box = own[ent] = {"id": f"s:{ent}", "kind": "own", "session": ent,
-                                  "where": where.get(ent) or ent, "topic": "", "first": ts, "last": ts,
-                                  "owner_msgs": 0, "tokens": 0, "usd": 0.0, "turns": 0}
+                box = own[ent] = {"id": f"s:{ent}", "kind": "own", "session": ent, "where": topic(ent), "topic": "",
+                                  "first": ts, "last": ts, "owner_msgs": 0, "tokens": 0, "machines": {}, "turns": 0}
                 out.append(box)
-            box["tokens"] += tokens(d)
-            box["usd"] += spent.get(e["seq"], 0.0)
+            n, host = tokens(d), _host_of(ent, me)
+            box["tokens"] += n
+            box["machines"][host] = box["machines"].get(host, 0) + n
             box["turns"] += 1
             box["last"] = max(box["last"], ts)
     for x in out:
-        x["usd"] = round(x["usd"], 2)
         if x["kind"] == "discussion":
             x["faded"] = x["owner_msgs"] >= LIVELY and end - x["last"] >= FADED
     return sorted(out, key=lambda x: -x["tokens"])
+
+
+def fold_agents(names, where, agents):
+    """Sessions that are not in a project but are named <agent>-<what> (an executor of an agent, also on another
+    machine, where its parent is unknown) go to the topic of the agent: session -> topic."""
+    out = {}
+    for n in names:
+        base, _, host = str(n).partition("@")
+        if n in where or not base:
+            continue
+        for a in sorted(agents, key=len, reverse=True):
+            if base.startswith(a + "-"):
+                out[n] = where.get(a) or where.get(f"{a}@{host}") or a
+                break
+    return out
+
+
+def machine_tokens(work):
+    """Tokens of the week by computer: {machine: tokens}."""
+    out = {}
+    for x in work:
+        for host, n in (x.get("machines") or {}).items():
+            out[host] = out.get(host, 0) + n
+    return out
+
+
+def machine_report(work, names, me, got, known=()):
+    """Which computers the report covers, for the owner (the plugin fills it in, not the model): a list of
+    {name, tokens, share} for every computer whose work came in and {name, missing: True} for the ones that did not
+    export. names - machine -> display name (Mac, Windows), me - ours, got - the other machines whose work came in."""
+    by, total = machine_tokens(work), sum(x["tokens"] for x in work) or 1
+    show = lambda h: names.get(h) or _hub_name(h)   # noqa: E731
+    out = [{"name": show(h), "tokens": human_tokens(by.get(h, 0)), "share": round(by.get(h, 0) / total, 3)}
+           for h in [me] + sorted(got)]
+    seen = {h.split(".")[0] for h in [me, *got]}
+    out += [{"name": show(h), "missing": True} for h in sorted(known) if h.split(".")[0] not in seen]
+    return out
+
+
+def _hub_name(host):
+    return host[:-6] if host.endswith(".local") else host
+
+
+def platform_of(cwd):
+    """The platform of a machine by a session folder it reported (hub-sync/agents/*/machines/<machine>.json): a drive
+    letter - Windows, /Users - Mac, /home - Linux; unknown - None."""
+    cwd = str(cwd or "")
+    if re.match(r"^[A-Za-z]:[\\/]", cwd):
+        return "Windows"
+    return "Mac" if cwd.startswith("/Users/") else "Linux" if cwd.startswith("/home/") else None
 
 
 def human_tokens(n):
     return f"{n / 1e6:.1f}M" if n >= 1e5 else f"{round(n / 1e3)}k"
 
 
-def work_digest(label, start, end, work, zone, top=12, note=""):
-    """The week's work digest for the review (English): by project, big ones higher; in a project - what the owner
-    discussed and assigned, how many tokens went, what went quiet. A project's tail is folded, but no project
-    disappears (14.10: the overall top by tokens was almost all work on the hub, ads went into "the rest")."""
+def work_digest(label, start, end, work, zone, top=12, note="", names=None):
+    """The week's work digest for the review (English): by topic, big ones higher; in a topic - what the owner
+    discussed and assigned, how many tokens went (and on which computer), what went quiet. A topic's tail is folded,
+    but no topic disappears (14.10: the overall top by tokens was almost all work on the hub, ads went into "the
+    rest"). names - machine -> display name (Mac, Windows)."""
+    names = names or {}
+    show = lambda h: names.get(h) or _hub_name(h)   # noqa: E731
     total = sum(x["tokens"] for x in work) or 1
+    by = machine_tokens(work)
+    split = lambda m: " · ".join(f"{show(h)} {human_tokens(n)}" for h, n in sorted(m.items(), key=lambda p: -p[1]) if n)   # noqa: E731
     lines = [f"# Work of the week {label}: {_at(start, zone)} — {_at(end - 1, zone)}", "",
-             f"Total tokens: {human_tokens(total)}, ≈ ${round(sum(x['usd'] for x in work))} at API list prices.", "",
+             f"Total tokens: {human_tokens(total)} ({split(by) or '—'}).", "",
              *([note, ""] if note else []),
-             "Line: id · what · period · owner's words · turns · tokens (share) · $ · state"]
+             "Line: id · what · period · owner's words · turns · tokens (share) · computer · state"]
     groups = {}
     for x in work:
         groups.setdefault(x["where"], []).append(x)
     for where, xs in sorted(groups.items(), key=lambda g: -sum(x["tokens"] for x in g[1])):
         xs = sorted(xs, key=lambda x: -x["tokens"])
         tok = sum(x["tokens"] for x in xs)
-        lines += ["", f"## {where} — {human_tokens(tok)} ({round(100 * tok / total)}%)", ""]
+        lines += ["", f"## {where} — {human_tokens(tok)} ({round(100 * tok / total)}%; {split(machine_tokens(xs)) or '—'})", ""]
         for x in xs[:top]:
             state = ("delivered" if x.get("done") else "not delivered") if x["kind"] == "task" else \
                 ("went quiet - decide: done or dropped" if x.get("faded") else "") if x["kind"] == "discussion" \
                 else "no request from the owner"
+            ms = x.get("machines") or {}
+            on = show(max(ms, key=ms.get)) if ms else "—"
             lines.append(f"- {x['id']} · {x['kind']}: {_cut(x['topic'], 300) or '—'} · "
                          f"{_at(x['first'], zone)} — {_at(x['last'], zone)} · {x['owner_msgs']} · {x['turns']} · "
-                         f"{human_tokens(x['tokens'])} ({round(100 * x['tokens'] / total)}%) · ${x['usd']} · {state}")
+                         f"{human_tokens(x['tokens'])} ({round(100 * x['tokens'] / total)}%) · {on} · {state}")
         rest = xs[top:]
         if rest:
             lines.append(f"- the rest: {len(rest)} items, {human_tokens(sum(x['tokens'] for x in rest))}")
