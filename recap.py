@@ -471,3 +471,157 @@ def work_digest(label, start, end, work, zone, top=12, note=""):
         if rest:
             lines.append(f"- остальное: {len(rest)} шт., {human_tokens(sum(x['tokens'] for x in rest))}")
     return "\n".join(lines) + "\n"
+
+
+# ───── дневной рекап: что в работе сейчас — по всем хабам, Jira и агентам ─────
+
+DAY_DEFAULT = {"on": True, "hour": 9, "minute": 0, "zone": None}   # каждый день в 9:00, пояс — как у недели
+# «день: 08:30 [пояс]» или «день: выкл» — пост владельца (или хаба) в канале плагина, как «расписание:» у недели
+DAY_SET = re.compile(r"^\s*день:\s*(?:(выкл)|(\d{1,2}):(\d{2}))(?:\s+(\S+))?\s*$", re.I)
+DAY_TOP = 6                # задач хаба в тексте владельцу; остальное — «и ещё N»
+DAY_STALE = 2 * 86400      # выгрузке другого хаба больше — его данные устарели (хаб выключен?)
+
+
+def day_schedule(state):
+    hubs = {n for n, s in ((state or {}).get("sessions") or {}).items() if s.get("kind") == "hub"}
+    for post in reversed(((state or {}).get("feeds") or {}).get("week-recap") or []):
+        m = DAY_SET.match(str(post.get("text") or ""))
+        if not m or (post.get("by") != "owner" and post.get("by") not in hubs):
+            continue
+        if m[1]:
+            return {**DAY_DEFAULT, "on": False}
+        hour, minute, zone = int(m[2]), int(m[3]), m[4]
+        if hour < 24 and minute < 60 and (not zone or known(zone)):
+            return {"on": True, "hour": hour, "minute": minute, "zone": zone}
+    return dict(DAY_DEFAULT)
+
+
+def day_due(now, zone, done, when=DAY_DEFAULT):
+    """Метка дня (2026-10-21), если сегодня время рекапа уже наступило, а его ещё не слали; хаб лежал — первый такт после.
+    Прошлые дни не навёрстываются: рекап — про «сейчас»."""
+    if not when.get("on", True):
+        return None
+    local = datetime.datetime.fromtimestamp(now, zone)
+    if local < local.replace(hour=when["hour"], minute=when["minute"], second=0, microsecond=0):
+        return None
+    label = local.strftime("%Y-%m-%d")
+    return None if label in done else label
+
+
+def open_now(state, now, droot):
+    """Снимок открытого этого хаба — той же функцией, что выгружает обмен (hub-sync/sync.py), чтобы свой хаб и чужие
+    выглядели одинаково. Ядро без неё (хаб ещё не обновился) — None."""
+    fn = getattr(_sync(), "open_snapshot", None)
+    return fn(state, now, droot) if fn else None
+
+
+def other_open(root, me):
+    """Снимки открытого других хабов (hub-sync/work/<машина>/open.json, их выгружает обмен): {машина: снимок}. Свою
+    машину не берём (MacBook.local и MacBook — одна)."""
+    out = {}
+    for host in sorted(os.listdir(root) if os.path.isdir(root) else []):
+        if host.split(".")[0] == me.split(".")[0]:
+            continue
+        try:
+            with open(os.path.join(root, host, "open.json"), encoding="utf-8") as f:
+                snap = json.load(f)
+        except (OSError, ValueError):
+            continue
+        if isinstance(snap, dict):
+            out[host] = clean(snap)
+    return out
+
+
+def _age(then, now):
+    if not then:
+        return "—"
+    h = max(0, now - then) / 3600
+    return f"{round(h)} ч" if h < 48 else f"{round(h / 24)} дн."
+
+
+STATE_WORDS = {"working": "в работе", "waiting-owner": "ждёт тебя", "stopped": "оборвалась"}
+
+
+def _hub(host):
+    return host[:-6] if host.endswith(".local") else host
+
+
+def day_digest(label, mine, theirs, now, zone, known_hosts=(), jira=None):
+    """Материал для разбора дня (markdown): по хабам — задачи dN (долго висящие выше), бэклоги направлений. Свой хаб —
+    mine (снимок open_now), чужие — theirs {машина: снимок}; машины, от которых снимка нет, — строкой."""
+    lines = [f"# Что в работе: {label}", ""]
+    lines += [f"Jira (MCP atlassian): {json.dumps(jira, ensure_ascii=False)}" if jira else "Jira: настроек нет в hub.json.", ""]
+    snaps = [("этот хаб", mine)] + [(f"хаб {_hub(h)}", s) for h, s in theirs.items()] if mine else \
+        [(f"хаб {_hub(h)}", s) for h, s in theirs.items()]
+    for name, snap in snaps:
+        stale = now - (snap.get("ts") or 0) >= DAY_STALE
+        lines += [f"## {name} ({_hub(snap.get('host') or '')}; снимок от {_at(snap['ts'], zone)}"
+                  + (" — СТАРЫЙ, хаб давно не выгружал: скажи об этом" if stale else "") + ")", ""]
+        tasks = snap.get("tasks") or []
+        lines.append(f"Задачи dN в работе: {len(tasks)} (давно висящие — выше)")
+        for t in tasks:
+            about = (snap.get("agents") or {}).get(t["session"])
+            lines.append(f"- {STATE_WORDS.get(t['state'], t['state'])} · у {t['session']}" + (f" ({about})" if about else "")
+                         + f" · висит {_age(t.get('created'), now)}" + ("" if t.get("owner") else " · поставил хаб или агент")
+                         + f" · {_cut(t.get('text'), 200) or '—'}")
+        lines.append("")
+        lines.append("Задачи в бэклогах направлений (внутри агентов):")
+        back = snap.get("backlog") or {}
+        for slug, xs in sorted(back.items()):
+            lines.append(f"- {slug}: " + "; ".join(f"{x['status']}: {_cut(x['title'], 100)}" for x in xs))
+        if not back:
+            lines.append("- нет")
+        lines.append("")
+    missing = sorted(h for h in known_hosts if h.split(".")[0] not in {x.split(".")[0] for x in theirs}
+                     and (not mine or h.split(".")[0] != mine["host"].split(".")[0]))
+    if missing:
+        lines += [f"Хабы без снимка: {', '.join(_hub(h) for h in missing)} — не выгружали, их задач тут нет; скажи об этом.", ""]
+    return "\n".join(lines)
+
+
+def day_text(label, mine, theirs, now, zone, known_hosts=(), why=""):
+    """Рекап дня без разбирающего — владельцу только то, что знает плагин: что в работе по хабам и бэклогам агентов.
+    Без id и путей, до ~15 строк; why — почему без Jira и без разбора."""
+    d = datetime.datetime.strptime(label, "%Y-%m-%d")
+    months = ("января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября",
+              "ноября", "декабря")
+    lines = [f"Что в работе, {d.day} {months[d.month - 1]}:"]
+    snaps = ([("Этот хаб", mine)] if mine else []) + [(f"Хаб {_hub(h)}", s) for h, s in theirs.items()]
+    for name, snap in snaps:
+        tasks = snap.get("tasks") or []
+        stale = " (данные старые — хаб давно не выгружал)" if now - (snap.get("ts") or 0) >= DAY_STALE else ""
+        lines.append(f"{name}: задач в работе — {len(tasks)}{stale}" if tasks else f"{name}: ничего не висит{stale}")
+        for t in tasks[:DAY_TOP]:
+            lines.append(f"• {_cut(t.get('text'), 90) or t['session']} — {t['session']}, {STATE_WORDS.get(t['state'], '')}, "
+                         f"{_age(t.get('created'), now)}")
+        if len(tasks) > DAY_TOP:
+            lines.append(f"• и ещё {len(tasks) - DAY_TOP}")
+        back = [(slug, x) for slug, xs in (snap.get("backlog") or {}).items() for x in xs]
+        if back:
+            lines.append(f"В бэклогах агентов: {len(back)} (" + ", ".join(sorted({s for s, _ in back})) + ")")
+    seen = {h.split(".")[0] for h in theirs} | ({mine["host"].split(".")[0]} if mine else set())
+    lines += [f"Хаб {_hub(h)}: выгрузки открытого пока нет — его задач здесь нет."
+              for h in sorted(known_hosts) if h.split(".")[0] not in seen]
+    lines.append(why or "Jira в этот рекап не вошла.")
+    return "\n".join(lines)
+
+
+def day_prompt(label, digest_path, out_path, jira):
+    """Поручение тому, кто собирает рекап дня (analyst, нет его — хаб): Jira + сводка плагина → короткий текст владельцу."""
+    where = (f"Jira (MCP atlassian, только чтение): сайт {jira.get('url')}, проекты {', '.join(jira.get('projects') or []) or 'все'}. "
+             if jira else "Jira (MCP atlassian, только чтение). ")
+    return (
+        f"[week-recap] Дневной рекап {label}: что у владельца в работе сейчас. Материал плагина — `{digest_path}`: задачи "
+        "всех его хабов (этот Мак и Windows) и бэклоги агентов (направлений), долго висящее выше.\n"
+        f"1. {where}Открытые на нём задачи (не Done; JQL вроде `assignee = currentUser() AND statusCategory != Done ORDER BY "
+        "updated`), что висит дольше всего и что ждёт его. Нет доступа — `hub tools request atlassian \"дневной рекап\"` и "
+        "строка в тексте, что Jira не вошла.\n"
+        "2. Склей задачи хабов и бэклоги агентов в его человеческие дела (одно дело — одна строка, дубль одной работы на "
+        "двух хабах — одной). Что висит дольше всего — первым. Старые снимки и хабы без снимка — одной строкой.\n"
+        "3. Текст: по-русски, до ~15 строк, три блока — «Хабы», «Jira», «Агенты»; коротко, как коллега говорит с утра, что "
+        "где стоит. Без id (dN, mN), путей, веток, названий моделей и устройства хаба.\n"
+        f"Итог — файл `{out_path}`: JSON {{\"text\": \"<рекап одним текстом, строки через \\n>\"}}. Итог хода — одна строка «готово».")
+
+
+def day_valid(data):
+    return isinstance(data, dict) and bool(str(data.get("text") or "").strip())

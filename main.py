@@ -4,9 +4,17 @@
 Teams, writer переписывает тексты по-человечески, плагин кладёт их в HTML дизайнера и шлёт владельцу.
 Журнал только читает; пишет — фактами в ящик ядра. Своё — в <состояние хаба>/week-recap/.
 
+Каждый день (по умолчанию в 9:00 по местному времени машины, при первом такте после — если хаб лежал; меняется постом
+«день: 08:30 [пояс]» или «день: выкл» в канале плагина) — дневной рекап: что в работе сейчас по всем хабам (свой — из
+состояния ядра, чужие — hub-sync/work/<машина>/open.json), в Jira и в агентах (бэклоги направлений). Собирает analyst (нет
+его — хаб), владельцу уходит одно сообщение; разбирающий молчит DAY_WAIT — уходит то, что знает плагин.
+
 Руками: python3 main.py --week 2026-W41 [--to 2026-10-09] [--dry]   — собрать сводку недели (--to — последний день,
 по умолчанию воскресенье; --dry — ничего не отправлять)
+        python3 main.py --day [2026-10-21] [--dry] [--force]       — дневной рекап (--dry — текст на экран, без отправки;
+--force — ещё раз за день, где он уже ушёл)
 """
+import datetime
 import glob
 import json
 import os
@@ -34,6 +42,8 @@ REPORTS = os.path.join(HERE, "web", "reports")   # копия отчёта дл�
 KEEP = 12                # недель во вкладке
 STARTED = time.time()    # когда поднялся процесс: «пн старт» — первый запуск хаба в понедельник
 TELEGRAM = 3500          # длинный разбор — начало и путь к файлу
+DAY_WAIT = 45 * 60       # разбирающий не ответил за 45 мин — дневной рекап без Jira, из того, что знает плагин
+DAY_KEEP = 30            # дней в состоянии
 
 
 def read(path, default):
@@ -106,6 +116,81 @@ def collect(label, zone, state_dir=STATE_DIR, home=HOME, state=None, until=None,
     return {"start": start, "end": end, "numbers": m["numbers"], "digest": path, "work": work_path,
             "draft": os.path.join(folder, "draft.json"), "final": os.path.join(folder, "recap.json"),
             "report": os.path.join(folder, "report.html"), "recap": os.path.join(folder, "recap.json")}, path
+
+
+def jira_config():
+    try:
+        j = (catalog.load_config(STATE_DIR) or {}).get("jira")
+    except Exception:   # noqa: BLE001 — без настроек — разбирающий ищет сам
+        j = None
+    return {k: j[k] for k in ("url", "projects") if j.get(k)} if isinstance(j, dict) else None
+
+
+def day_material(label, zone, now, state, state_dir=STATE_DIR, home=HOME, others=None):
+    """Сводка дня в файл: (запись дня, снимок этого хаба, снимки чужих). Нет у ядра open_snapshot — None."""
+    mine = recap.open_now(state, now, os.path.join(state_dir, "directions"))
+    theirs = recap.other_open(others or OTHERS, socket.gethostname())
+    if mine is None and not theirs:
+        return None
+    folder = os.path.join(home, "day", label)
+    os.makedirs(folder, exist_ok=True)
+    path = os.path.join(folder, "open.md")
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(recap.day_digest(label, mine, theirs, now, zone, machines(), jira_config()))
+    return {"digest": path, "final": os.path.join(folder, "recap.json"),
+            "text": recap.day_text(label, mine, theirs, now, zone, machines())}, mine, theirs
+
+
+def start_day(label, zone, now, mine, state, send=put, state_dir=STATE_DIR, home=HOME, others=None):
+    """Дневной рекап: сводка → разбирающему (analyst, нет его — хаб; никого — сразу текст плагина). False — нечего слать."""
+    got = day_material(label, zone, now, state, state_dir, home, others)
+    if not got:
+        return False
+    day = got[0]
+    to = recap.reviewer(state)
+    day.update(to=to, sent=now)
+    if to:
+        send("message.received", None, {"to": to, "text": recap.day_prompt(label, day["digest"], day["final"], jira_config()),
+                                        "channel": "session", "owner": False, "sender": NAME})
+    else:
+        day["sent"] = now - DAY_WAIT   # разбирать некому — сразу то, что есть
+    mine.setdefault("days", {})[label] = day
+    return True
+
+
+def notify_day(label, day, text, now, send=put):
+    months = ("января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября",
+              "декабря")
+    d = [int(x) for x in label.split("-")]
+    send("owner.notify", None, {"title": f"Что в работе · {d[2]} {months[d[1] - 1]}", "text": text.strip(),
+                                "source": NAME, "channel": "cli", "owner": True})
+    day.update(notified=now, shown=text.strip())
+
+
+def finish_days(now, mine, send=put):
+    """Рекап пришёл — владельцу; не пришёл за DAY_WAIT — текст плагина. True — что-то поменялось."""
+    changed = False
+    for label, day in (mine.get("days") or {}).items():
+        if day.get("notified"):
+            continue
+        try:
+            with open(day["final"], encoding="utf-8") as f:
+                data = json.load(f)
+            fresh = os.path.getmtime(day["final"]) >= day["sent"] - 1 and recap.day_valid(data)
+        except (OSError, ValueError):
+            fresh = False
+        if fresh:
+            notify_day(label, day, str(data["text"]), now, send)
+        elif now - day["sent"] >= DAY_WAIT:
+            why = (f"Рекап от {day['to']} не пришёл — Jira и сведение дел не вошли." if day.get("to")
+                   else "Разбирать некому — Jira не вошла.")
+            notify_day(label, day, day["text"] + "\n" + why, now, send)
+        else:
+            continue
+        changed = True
+    for old in sorted(mine.get("days") or {})[:-DAY_KEEP]:
+        del mine["days"][old]
+    return changed
 
 
 def period(w, zone):
@@ -228,12 +313,38 @@ def tick(now, mine, state, send=put, state_dir=STATE_DIR, home=HOME):
     if label:
         start(label, zone, now, mine, state, send, state_dir, home)
         changed = True
-    return finish(now, mine, state, send) or changed
+    changed = finish(now, mine, state, send) or changed
+    day = recap.day_schedule(state)
+    dzone = recap.tz(day["zone"] or when["zone"])
+    label = recap.day_due(now, dzone, mine.setdefault("days", {}), day)
+    if label and start_day(label, dzone, now, mine, state, send, state_dir, home):
+        changed = True
+    return finish_days(now, mine, send) or changed
 
 
 def main():
     mine_path = os.path.join(HOME, "state.json")
     mine = read(mine_path, {"weeks": {}})
+    if "--day" in sys.argv:
+        i = sys.argv.index("--day")
+        label = sys.argv[i + 1] if len(sys.argv) > i + 1 and not sys.argv[i + 1].startswith("--") else None
+        when = recap.day_schedule(journal.load_state(STATE_DIR))
+        zone = recap.tz(when["zone"] or (mine.get("schedule") or recap.DEFAULT)["zone"])
+        now = time.time()
+        label = label or datetime.datetime.fromtimestamp(now, zone).strftime("%Y-%m-%d")
+        state = journal.load_state(STATE_DIR)
+        if "--dry" in sys.argv:
+            got = day_material(label, zone, now, state)
+            print(got[0]["text"] + f"\n\nСводка для разбора: {got[0]['digest']}" if got else "нечего собирать: у ядра нет open_snapshot")
+            return
+        if label in (mine.get("days") or {}) and "--force" not in sys.argv:
+            sys.exit(f"рекап {label} уже отправлен (ещё раз — --force)")
+        if not start_day(label, zone, now, mine, state):
+            sys.exit("нечего собирать: у ядра нет open_snapshot (hub-sync/sync.py), чужих выгрузок нет")
+        write(mine_path, mine)
+        print(f"отдано на разбор: {mine['days'][label].get('to')}; сводка: {mine['days'][label]['digest']}; "
+              f"без ответа за {DAY_WAIT // 60} мин уйдёт текст плагина (основной процесс плагина отправит)")
+        return
     if "--week" in sys.argv:
         label = sys.argv[sys.argv.index("--week") + 1]
         zone = recap.tz((mine.get("schedule") or recap.DEFAULT)["zone"])

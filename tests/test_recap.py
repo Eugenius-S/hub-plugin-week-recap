@@ -29,6 +29,9 @@ MON = at(2026, 10, 5, 0)
 BERLIN_9 = {"id": "p1", "by": "owner", "text": "расписание: пн 09:00 Europe/Berlin", "ts": 0}     # неделя 2026-W41: 5.10 0:00 — 12.10 0:00
 
 
+DAY_OFF = {"id": "p2", "by": "owner", "text": "день: выкл", "ts": 0}   # недельные тесты — без дневного рекапа
+
+
 def ev(seq, ts, type_, entity=None, **data):
     return {"seq": seq, "ts": ts, "src": "x", "type": type_, "entity": entity, "data": data}
 
@@ -175,7 +178,7 @@ class Flow(unittest.TestCase):
         self.sent, self.mine = [], {"weeks": {}}
         self.send = lambda *a: self.sent.append(a)
 
-    def tick(self, now, sessions, feed=(BERLIN_9,)):
+    def tick(self, now, sessions, feed=(BERLIN_9, DAY_OFF)):
         return main.tick(now, self.mine, {"sessions": sessions, "feeds": {"week-recap": list(feed)}}, self.send,
                          self.state, self.home)
 
@@ -350,6 +353,172 @@ class Work(unittest.TestCase):
         self.assertIn("Old за эти дни не выгружал", note)
         self.assertNotIn("Mac", note)
         self.assertIn(note, recap.work_digest("2026-W41", MON, at(2026, 10, 12, 0), [], ZONE, note=note))
+
+
+def snap(host, ts, tasks=(), backlog=None, agents=None):
+    return {"host": host, "ts": ts, "tasks": list(tasks), "agents": agents or {}, "backlog": backlog or {}}
+
+
+def task(id_, session, state, created, text, owner=True):
+    return {"id": id_, "session": session, "state": state, "created": created, "since": created, "text": text,
+            "owner": owner}
+
+
+class Day(unittest.TestCase):
+    """Дневной рекап: что в работе по всем хабам, Jira и агентам; раз в день, один текст владельцу."""
+    NOW = at(2026, 10, 21, 9, 5)
+
+    def test_due_every_day_from_nine_once_and_the_past_is_not_caught_up(self):
+        when = recap.DAY_DEFAULT
+        self.assertIsNone(recap.day_due(at(2026, 10, 21, 8, 59), ZONE, {}, when))
+        self.assertEqual(recap.day_due(at(2026, 10, 21, 9), ZONE, {}, when), "2026-10-21")
+        self.assertEqual(recap.day_due(at(2026, 10, 21, 17), ZONE, {"2026-10-20": {}}, when), "2026-10-21")   # хаб лежал
+        self.assertIsNone(recap.day_due(at(2026, 10, 21, 17), ZONE, {"2026-10-21": {}}, when))
+        self.assertEqual(recap.day_due(at(2026, 10, 18, 9, 1), ZONE, {}, when), "2026-10-18")   # воскресенье тоже
+        self.assertIsNone(recap.day_due(at(2026, 10, 21, 17), ZONE, {}, {**when, "on": False}))
+
+    def test_the_owner_sets_the_time_or_switches_it_off(self):
+        def feed(*texts, by="owner"):
+            return {"feeds": {"week-recap": [{"by": by, "text": t} for t in texts]}}
+        self.assertEqual(recap.day_schedule({}), recap.DAY_DEFAULT)
+        self.assertEqual(recap.day_schedule(feed("день: 08:30 Europe/Berlin")),
+                         {"on": True, "hour": 8, "minute": 30, "zone": "Europe/Berlin"})
+        self.assertFalse(recap.day_schedule(feed("день: 08:30", "день: выкл"))["on"])
+        self.assertEqual(recap.day_schedule(feed("день: 25:00")), recap.DAY_DEFAULT)         # не время — прежнее
+        self.assertEqual(recap.day_schedule(feed("день: выкл", by="agent")), recap.DAY_DEFAULT)   # чужой пост — нет
+        self.assertEqual(recap.day_schedule(feed("расписание: пн 09:00")), recap.DAY_DEFAULT)    # это про неделю
+
+    def test_other_hubs_snapshot_is_read_but_not_ours(self):
+        d = tempfile.mkdtemp()
+        for host in ("Win", "Mac.local"):
+            os.makedirs(os.path.join(d, host))
+            with open(os.path.join(d, host, "open.json"), "w", encoding="utf-8") as f:
+                json.dump(snap(host, 1, [task("d1", "a", "working", 1, "ключ token=" + "z" * 30)]), f)
+        os.makedirs(os.path.join(d, "Old"))   # выгрузки открытого ещё нет
+        got = recap.other_open(d, "Mac")
+        self.assertEqual(list(got), ["Win"])
+        self.assertNotIn("z" * 30, json.dumps(got))
+
+    def test_text_is_short_oldest_first_and_says_what_is_missing(self):
+        mine = snap("Mac.local", self.NOW, [task("d1", "gen", "working", self.NOW - 5 * 86400, "ролики трекера")]
+                    + [task(f"d{i}", "dev", "waiting-owner", self.NOW - 3600, f"правка {i}") for i in range(2, 9)],
+                    {"ads": [{"id": "TASK-1", "title": "сториборд", "status": "To Do"}]})
+        win = snap("Win", self.NOW - 4 * 86400, [])
+        text = recap.day_text("2026-10-21", mine, {"Win": win}, self.NOW, ZONE, {"Win", "Mac.local", "Old"})
+        self.assertTrue(text.startswith("Что в работе, 21 октября"))
+        self.assertIn("Этот хаб: задач в работе — 8", text)
+        self.assertIn("и ещё 2", text)                       # DAY_TOP = 6
+        self.assertIn("5 дн.", text)
+        self.assertIn("Хаб Win: ничего не висит (данные старые", text)
+        self.assertIn("В бэклогах агентов: 1 (ads)", text)
+        self.assertIn("Хаб Old: выгрузки открытого пока нет", text)
+        self.assertNotIn("Хаб Mac", text)
+        self.assertIn("Jira в этот рекап не вошла", text)
+        self.assertLessEqual(len(text.splitlines()), 16)
+        self.assertNotRegex(text, r"\bd\d+\b")                # id — не владельцу
+
+    def test_digest_for_the_analyst_names_hubs_without_a_snapshot(self):
+        mine = snap("Mac.local", self.NOW, [task("d1", "gen", "stopped", self.NOW - 7200, "ролик", owner=False)],
+                    agents={"gen": "Генерация"})
+        md = recap.day_digest("2026-10-21", mine, {}, self.NOW, ZONE, {"Win", "Mac.local"}, {"url": "https://j", "projects": ["DSN"]})
+        self.assertIn("оборвалась · у gen (Генерация) · висит 2 ч · поставил хаб или агент · ролик", md)
+        self.assertIn("Хабы без снимка: Win", md)
+        self.assertIn("https://j", md)
+        self.assertNotIn("Хабы без снимка: Mac", md)
+
+    def test_prompt_asks_for_jira_json_and_no_ids(self):
+        text = recap.day_prompt("2026-10-21", "/o.md", "/r.json", {"url": "https://j", "projects": ["DSN"]})
+        for part in ("DSN", "/r.json", "/o.md", "Jira", "Без id"):
+            self.assertIn(part, text)
+        self.assertTrue(recap.day_valid({"text": "x"}))
+        self.assertFalse(recap.day_valid({"text": " "}))
+        self.assertFalse(recap.day_valid([]))
+
+
+class DayFlow(unittest.TestCase):
+    NOW = at(2026, 10, 21, 9, 5)
+
+    def setUp(self):
+        self.home = tempfile.mkdtemp()
+        self.others = tempfile.mkdtemp()
+        os.makedirs(os.path.join(self.others, "Win"))
+        with open(os.path.join(self.others, "Win", "open.json"), "w", encoding="utf-8") as f:
+            json.dump(snap("Win", self.NOW - 600, [task("d1", "ads", "working", self.NOW - 86400, "ролик")]), f)
+        self.sent = []
+        self.mine = {"weeks": {"2026-W42": {"notified": 1}}}   # неделю уже слали — тут только день
+        self.state = {"sessions": {"analyst": {"state": "idle", "role": "agent"}},
+                      "feeds": {"week-recap": [{"by": "owner", "text": "день: 09:00 Europe/Berlin"}]}}
+        self.orig = recap.open_now
+        recap.open_now = lambda st, now, droot: snap("Mac", now, [task("d9", "gen", "working", now - 7200, "наше")])
+        main.OTHERS = self.others
+
+    def tearDown(self):
+        recap.open_now = self.orig
+
+    def send(self, *a):
+        self.sent.append(a)
+
+    def tick(self, now):
+        return main.tick(now, self.mine, self.state, self.send, self.home, self.home)
+
+    def test_analyst_recap_goes_to_the_owner_once(self):
+        self.tick(self.NOW)
+        to_analyst = [a for a in self.sent if a[0] == "message.received"]
+        self.assertEqual(len(to_analyst), 1)
+        self.assertEqual(to_analyst[0][2]["to"], "analyst")
+        with open(self.mine["days"]["2026-10-21"]["digest"], encoding="utf-8") as f:
+            self.assertIn("Win", f.read())
+        self.tick(self.NOW + 60)   # второй такт: не второй раз, пока ждём
+        self.assertEqual(len([a for a in self.sent if a[0] == "message.received"]), 1)
+        self.assertFalse([a for a in self.sent if a[0] == "owner.notify"])
+        day = self.mine["days"]["2026-10-21"]
+        with open(day["final"], "w", encoding="utf-8") as f:
+            json.dump({"text": "Хабы: всё идёт.\nJira: 2 задачи."}, f)
+        os.utime(day["final"], (self.NOW + 100, self.NOW + 100))   # часы теста, не настоящие
+        self.tick(self.NOW + 120)
+        notes = [a for a in self.sent if a[0] == "owner.notify"]
+        self.assertEqual(len(notes), 1)
+        self.assertEqual(notes[0][2]["text"], "Хабы: всё идёт.\nJira: 2 задачи.")
+        self.assertEqual(notes[0][2]["title"], "Что в работе · 21 октября")
+        self.tick(self.NOW + 3 * 3600)
+        self.assertEqual(len([a for a in self.sent if a[0] == "owner.notify"]), 1)   # один раз за день
+
+    def test_silent_analyst_the_plugin_text_goes_out(self):
+        self.tick(self.NOW)
+        self.tick(self.NOW + main.DAY_WAIT + 1)
+        notes = [a for a in self.sent if a[0] == "owner.notify"]
+        self.assertEqual(len(notes), 1)
+        self.assertIn("Хаб Win: задач в работе — 1", notes[0][2]["text"])
+        self.assertIn("Этот хаб: задач в работе — 1", notes[0][2]["text"])
+        self.assertIn("не пришёл", notes[0][2]["text"])
+
+    def test_no_one_to_review_goes_straight_out(self):
+        self.state["sessions"] = {}
+        self.tick(self.NOW)
+        self.assertEqual([a[0] for a in self.sent], ["owner.notify"])
+        self.assertIn("Разбирать некому", self.sent[0][2]["text"])
+
+    def test_old_answer_is_not_todays(self):
+        """recap.json вчерашнего дня лежит в папке другого дня — но и тот же день: файл старше отправки не принимаем."""
+        self.tick(self.NOW)
+        day = self.mine["days"]["2026-10-21"]
+        with open(day["final"], "w", encoding="utf-8") as f:
+            json.dump({"text": "вчерашнее"}, f)
+        os.utime(day["final"], (self.NOW - 86400, self.NOW - 86400))
+        self.tick(self.NOW + 60)
+        self.assertFalse([a for a in self.sent if a[0] == "owner.notify"])
+
+    def test_off_and_before_nine_send_nothing(self):
+        self.tick(at(2026, 10, 21, 8, 0))
+        self.state["feeds"]["week-recap"].append({"by": "owner", "text": "день: выкл"})
+        self.tick(self.NOW)
+        self.assertEqual(self.sent, [])
+
+    def test_old_core_without_the_snapshot_and_no_other_hubs_does_nothing(self):
+        recap.open_now = lambda *a: None
+        main.OTHERS = tempfile.mkdtemp()
+        self.tick(self.NOW)
+        self.assertEqual(self.sent, [])
 
 
 class StartMode(unittest.TestCase):
