@@ -261,8 +261,7 @@ class Work(unittest.TestCase):
         self.assertEqual((work["s:gen"]["tokens"], work["s:gen"]["owner_msgs"]), (5, 0))   # слова владельца — не в своё                          # одно слово — не активное обсуждение
 
     def test_a_tool_built_for_a_topic_counts_to_that_topic(self):
-        """Владелец 14.10: «то, что потребовалось для создания промт инженеров, скрипта для mj — к генеративным стилям;
-        да, это хаб, но нет, это задачи конкретные»: задача сессии хаба, которую поставила рабочая сессия, — к её теме."""
+        """Задача сессии хаба, которую поставила рабочая сессия, — к её теме."""
         evs = [ev(1, at(2026, 10, 6, 9), "delegation.created", session="hub-dev", context="mj-скрипт: апскейл 2048",
                   **{"for": None, "for_session": "gen"}),
                ev(2, at(2026, 10, 6, 9, 30), "turn.result", "hub-dev", tokens_in=900, tokens_out=0),
@@ -300,7 +299,7 @@ class Work(unittest.TestCase):
         self.assertEqual(main.period({"start": start, "end": end}, ZONE), "5–9 октября")
 
     def test_the_other_hubs_week_joins_without_mixing_sessions(self):
-        """Два хаба через GitHub (hub-sync/work/<машина>/): рекап — по работе обоих (владелец 14.10)."""
+        """Два хаба через GitHub (hub-sync/work/<машина>/): рекап — по работе обоих."""
         d = tempfile.mkdtemp()
         os.makedirs(os.path.join(d, "Win"))
         other = [{"type": "hub.where", "data": {"ads": "Реклама"}},
