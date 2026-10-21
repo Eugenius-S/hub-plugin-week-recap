@@ -601,6 +601,7 @@ class DayFlow(unittest.TestCase):
         self.assertEqual(data["title"], "Что в работе · 21 октября")
         self.assertIn("Хаб Win: задач в работе — 1", data["text"])
         self.assertIn("Рекап от analyst не пришёл", data["text"])
+        self.assertTrue(data["asked"])   # telegram.brief глушит owner.notify без asked/urgent
 
     def test_no_one_to_review_goes_straight_out(self):
         self.state["sessions"] = {}
@@ -774,7 +775,7 @@ class Language(unittest.TestCase):
         for key in ("description", "why"):
             self.assertNotRegex(man[key], CYRILLIC, key)
             self.assertRegex(man["i18n"]["ru"][key], CYRILLIC, key)
-        self.assertEqual(man["version"], "2.3.0")
+        self.assertEqual(man["version"], "2.3.1")
 
 
 def node(prog):

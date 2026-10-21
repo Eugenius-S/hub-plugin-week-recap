@@ -3,7 +3,7 @@
   "icon": "icon.png",
   "description": "Week: every Monday (at 9:00 or at the first start of the hub - changed in the tab) a recap of last week for you, from all your computers at once: first the insights about working with the hub (what you may not know, what quietly broke, what to improve in how you set tasks), then what was done by themes - the hub itself, plugins, design, videos, other projects - with the tokens each task and each video took; plus tasks for the week from Jira, Teams and Granola - filed and not. Written by the analyst and the writer, laid out as an HTML report. Also a daily recap every morning (at 9:00 or at the first start of the hub): everything in progress on all hubs, the Jira tasks and the agents' tasks - in one message",
   "why": "Once a week you see what was really done, how many tokens it took, and - the main thing - what to learn or change in working with the hub; and every morning - what hangs in progress now",
-  "version": "2.3.0",
+  "version": "2.3.1",
   "hub": "^1.2",
   "run": [
     "python3",

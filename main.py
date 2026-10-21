@@ -234,7 +234,7 @@ def start_day(label, zone, now, mine, state, send=put, state_dir=STATE_DIR, home
 def notify_day(label, day, text, now, send=put):
     lang = day.get("lang") or _lang()
     send("owner.notify", None, {"title": tr(lang, "day_title", date=recap.day_date(label, lang)), "text": text.strip(),
-                                "source": NAME, "channel": "cli", "owner": True})
+                                "source": NAME, "channel": "cli", "owner": True, "asked": True})
     day.update(notified=now, shown=text.strip())
 
 
@@ -323,7 +323,7 @@ def publish(label, w, data, now, send=put):
     send("owner.notify", None, {"title": tr(lang, "title", week=data["week"]),
                                 "text": "\n\n".join([str(data.get("tldr") or "").strip(), *(["\n".join(heads)] if heads else []),
                                                      tr(lang, "full", path=w["report"])]),
-                                "source": NAME, "channel": "cli", "owner": True})
+                                "source": NAME, "channel": "cli", "owner": True, "asked": True})
     w.update(notified=now, text=str(data.get("tldr") or ""), data=data)
 
 
@@ -362,7 +362,7 @@ def finish(now, mine, state=None, send=put):
             send("owner.notify", None, {"title": tr(lang, "numbers_title", label=label),
                                         "text": tr(lang, "numbers_body", why=why, numbers=numbers_text(w["numbers"], lang),
                                                    path=w["digest"]),
-                                        "source": NAME, "channel": "cli", "owner": True})
+                                        "source": NAME, "channel": "cli", "owner": True, "asked": True})
             w["notified"] = now
             changed = True
     return changed
