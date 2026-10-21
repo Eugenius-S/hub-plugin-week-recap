@@ -1,13 +1,19 @@
 {
   "name": "week-recap",
   "icon": "icon.png",
-  "description": "«Неделя»: каждый понедельник (в 9:00 или при первом запуске хаба — меняется во вкладке) рекап прошлой недели для вас: что сделано, что в работе и брошено, сколько токенов ушло на какую задачу, как работалось с хабом и что попробовать; плюс задачи на неделю из Jira, Teams и Granola — заведённые и нет. Пишут analyst и writer, оформление — HTML-отчёт. Плюс дневной рекап каждое утро (в 9:00 или при первом запуске хаба): всё, что в работе, по всем хабам, задачи в Jira и у агентов — одним сообщением",
-  "why": "Раз в неделю видно, что реально сделано и что впереди, — человеческим языком, без технического шума; а по утрам — что сейчас висит в работе",
-  "version": "2.1.0",
+  "description": "Week: every Monday (at 9:00 or at the first start of the hub - changed in the tab) a recap of last week for you: what was done, what is in progress and dropped, how many tokens went to which task, how working with the hub went and what to try; plus tasks for the week from Jira, Teams and Granola - filed and not. Written by the analyst and the writer, laid out as an HTML report. Also a daily recap every morning (at 9:00 or at the first start of the hub): everything in progress on all hubs, the Jira tasks and the agents' tasks - in one message",
+  "why": "Once a week you see what was really done and what is ahead - in plain words, without technical noise; and every morning - what hangs in progress now",
+  "version": "2.2.0",
   "hub": "^1.2",
   "run": [
     "python3",
     "main.py"
   ],
-  "web": "web/main.js"
+  "web": "web/main.js",
+  "i18n": {
+    "ru": {
+      "description": "«Неделя»: каждый понедельник (в 9:00 или при первом запуске хаба — меняется во вкладке) рекап прошлой недели для вас: что сделано, что в работе и брошено, сколько токенов ушло на какую задачу, как работалось с хабом и что попробовать; плюс задачи на неделю из Jira, Teams и Granola — заведённые и нет. Пишут analyst и writer, оформление — HTML-отчёт. Плюс дневной рекап каждое утро (в 9:00 или при первом запуске хаба): всё, что в работе, по всем хабам, задачи в Jira и у агентов — одним сообщением",
+      "why": "Раз в неделю видно, что реально сделано и что впереди, — человеческим языком, без технического шума; а по утрам — что сейчас висит в работе"
+    }
+  }
 }

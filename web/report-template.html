@@ -1,10 +1,10 @@
 <!doctype html>
-<html lang="ru">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="color-scheme" content="light dark">
-<title>Неделя</title>
+<title>Week</title>
 <style>
   :root {
     --bg: oklch(98.2% 0.006 85);
@@ -76,7 +76,7 @@
   .ic { width: 24px; height: 24px; flex: none; fill: currentColor; color: var(--ink-2); }
   .ic.sm { width: 16px; height: 16px; }
 
-  /* цифры */
+  /* numbers */
   .numbers { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--s5) var(--s4); margin: 0; }
   .numbers div { min-width: 0; display: flex; flex-direction: column; }
   .numbers dd { order: -1; }
@@ -84,7 +84,7 @@
   .numbers dt { margin-top: var(--s2); font-size: 15px; line-height: 1.35; }
   .numbers .hint { display: block; margin-top: 2px; color: var(--ink-3); font-size: 13px; line-height: 1.35; }
 
-  /* списки задач */
+  /* task lists */
   .items { list-style: none; margin: 0; padding: 0; }
   .items > li { padding: var(--s4) 0; border-bottom: 1px solid var(--line); }
   .items > li:first-child { padding-top: 0; }
@@ -107,13 +107,13 @@
   .next b { color: var(--ink); font-weight: 600; }
   .dropped .title { color: var(--ink-2); }
 
-  /* токены */
+  /* tokens */
   .tokens .line { display: flex; justify-content: space-between; gap: var(--s4); align-items: baseline; }
   .tokens .val { color: var(--ink-2); font-size: 15px; font-variant-numeric: tabular-nums; white-space: nowrap; }
   .bar { margin-top: var(--s2); height: 6px; border-radius: 3px; background: var(--bar-track); overflow: hidden; }
   .bar i { display: block; height: 100%; border-radius: 3px; background: var(--bar); }
 
-  /* как работали вместе */
+  /* how we worked together */
   .together { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s5); }
   .together h3 { display: flex; align-items: center; gap: var(--s2); margin: 0 0 var(--s3); font-size: 15px; font-weight: 600; }
   .together h3::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--dot); }
@@ -122,7 +122,7 @@
   .together ul { margin: 0; padding: 0 0 0 1.1em; color: var(--ink-2); }
   .together li + li { margin-top: var(--s2); }
 
-  /* советы */
+  /* tips */
   .tip { padding: var(--s5); border-radius: var(--r); background: var(--surface); }
   .tip + .tip { margin-top: var(--s4); }
   .tip .title { font: 600 19px/1.35 var(--serif); }
@@ -132,7 +132,7 @@
   .tip dd { margin: 2px 0 0; color: var(--ink-2); }
   .tip dd.try { color: var(--ink); }
 
-  /* туду */
+  /* todo */
   .sub { margin: 0 0 var(--s3); color: var(--ink-3); font-size: 14px; }
   .sub + .items, .items + .sub { margin-top: 0; }
   .items + .sub { margin-top: var(--s6); }
@@ -187,90 +187,90 @@
     <p class="tldr" id="tldr"></p>
   </header>
 
-  <section id="s-numbers" aria-label="Цифры недели">
+  <section id="s-numbers" aria-label="Numbers of the week" data-t-aria="numbers_aria">
     <dl class="numbers" id="numbers"></dl>
   </section>
 
   <section id="s-done" class="done">
-    <h2><svg class="ic"><use href="#i-done"/></svg>Сделано<span class="count"></span></h2>
+    <h2><svg class="ic"><use href="#i-done"/></svg><span data-t="done">Done</span><span class="count"></span></h2>
     <ul class="items" id="done"></ul>
   </section>
 
   <section id="s-progress">
-    <h2><svg class="ic"><use href="#i-progress"/></svg>В работе<span class="count"></span></h2>
+    <h2><svg class="ic"><use href="#i-progress"/></svg><span data-t="progress">In progress</span><span class="count"></span></h2>
     <ul class="items" id="progress"></ul>
   </section>
 
   <section id="s-dropped" class="dropped">
-    <h2><svg class="ic"><use href="#i-dropped"/></svg>Брошено<span class="count"></span></h2>
+    <h2><svg class="ic"><use href="#i-dropped"/></svg><span data-t="dropped">Dropped</span><span class="count"></span></h2>
     <ul class="items" id="dropped"></ul>
   </section>
 
   <section id="s-tokens" class="tokens">
-    <h2><svg class="ic"><use href="#i-tokens"/></svg>Куда ушли токены</h2>
+    <h2><svg class="ic"><use href="#i-tokens"/></svg><span data-t="tokens">Where the tokens went</span></h2>
     <ul class="items" id="tokens"></ul>
   </section>
 
   <section id="s-together">
-    <h2><svg class="ic"><use href="#i-together"/></svg>Как работали вместе</h2>
+    <h2><svg class="ic"><use href="#i-together"/></svg><span data-t="together">How we worked together</span></h2>
     <div class="together">
-      <div class="good" id="good-box"><h3>Шло легко</h3><ul id="good"></ul></div>
-      <div class="slow" id="slow-box"><h3>Тормозило</h3><ul id="slow"></ul></div>
+      <div class="good" id="good-box"><h3 data-t="good">Went easily</h3><ul id="good"></ul></div>
+      <div class="slow" id="slow-box"><h3 data-t="slow">Slowed down</h3><ul id="slow"></ul></div>
     </div>
   </section>
 
   <section id="s-tips">
-    <h2><svg class="ic"><use href="#i-tips"/></svg>Что попробовать</h2>
+    <h2><svg class="ic"><use href="#i-tips"/></svg><span data-t="tips">What to try</span></h2>
     <div id="tips"></div>
   </section>
 
   <section id="s-todo" class="todo">
-    <h2><svg class="ic"><use href="#i-todo"/></svg>На эту неделю</h2>
-    <p class="sub" id="filed-sub">Уже заведено</p>
+    <h2><svg class="ic"><use href="#i-todo"/></svg><span data-t="todo">For this week</span></h2>
+    <p class="sub" id="filed-sub" data-t="filed">Already filed</p>
     <ul class="items" id="filed"></ul>
-    <p class="sub" id="notfiled-sub">Обсуждали, но задачи нет</p>
+    <p class="sub" id="notfiled-sub" data-t="notfiled">Discussed, but no task</p>
     <ul class="items notfiled" id="notfiled"></ul>
   </section>
 </main>
 
 <script id="recap-data" type="application/json">
 {
-  "week": "5–11 октября",
-  "tldr": "Главное за неделю: запустили генерацию Y2K в Midjourney и собрали 14 объектов. Хаб стал стабильнее, но вы трижды переписывали одну и ту же задачу про промпты — это съело полдня.",
+  "week": "Oct 5–11",
+  "tldr": "The main thing this week: 14 illustrations for the spring campaign are finished and delivered. The hub got steadier, but you rewrote the same prompts task three times - that ate half a day.",
   "numbers": [
-    {"label": "Задач закрыто", "value": "12", "hint": "из 17 начатых"},
-    {"label": "С первого раза", "value": "7 из 12", "hint": "остальные с правками"},
-    {"label": "Работа агентов", "value": "31 ч", "hint": "пока вы занимались своим"},
-    {"label": "Токенов", "value": "48 млн", "hint": "≈ $310 по прайсу API"}
+    {"label": "Tasks closed", "value": "12", "hint": "of 17 started"},
+    {"label": "First try", "value": "7 of 12", "hint": "the rest needed edits"},
+    {"label": "Agent work", "value": "31 h", "hint": "while you did your own things"},
+    {"label": "Tokens", "value": "48M", "hint": "≈ $310 at API list prices"}
   ],
   "done": [
-    {"title": "Y2K: 14 иллюстраций в Midjourney", "where": "Генерация · Y2K", "story": "От исходника в GPT до апскейла, всё лежит в папках объектов.", "tokens": "9,2 млн", "first_try": false},
-    {"title": "Плагин Teams проверен", "where": "Хаб", "story": "Посмотрели код до установки: делает, что обещает.", "tokens": "0,4 млн", "first_try": true}
+    {"title": "Spring campaign: 14 illustrations", "where": "Illustration · Spring campaign", "story": "From the source brief to the upscale, everything is in the object folders.", "tokens": "9.2M", "first_try": false},
+    {"title": "Chat plugin reviewed", "where": "Hub", "story": "Read the code before installing: it does what it promises.", "tokens": "0.4M", "first_try": true}
   ],
   "in_progress": [
-    {"title": "Frutiger Aero: материалы", "where": "Генерация · Frutiger", "next": "Ждёт вашего выбора из 6 вариантов", "tokens": "3,1 млн"}
+    {"title": "Summer set: materials", "where": "Illustration · Summer set", "next": "Waiting for your pick from 6 options", "tokens": "3.1M"}
   ],
   "dropped": [
-    {"title": "Мини-сайт для Brila", "why": "Обсуждение стихло в среду, к нему не возвращались"}
+    {"title": "Mini-site for the launch", "why": "The discussion went quiet on Wednesday and was not returned to"}
   ],
   "tokens_by_task": [
-    {"title": "Y2K: 14 иллюстраций", "tokens": "9,2 млн", "share": 0.19},
-    {"title": "Frutiger Aero: материалы", "tokens": "3,1 млн", "share": 0.06}
+    {"title": "Spring campaign: 14 illustrations", "tokens": "9.2M", "share": 0.19},
+    {"title": "Summer set: materials", "tokens": "3.1M", "share": 0.06}
   ],
   "together": {
-    "good": ["Короткие задачи с примером результата закрывались с первого раза."],
-    "slow": ["Задачи без «готово, когда…» возвращались на доработку 2–3 раза."]
+    "good": ["Short tasks with an example of the result closed on the first try."],
+    "slow": ["Tasks without a \"done when...\" came back for rework 2–3 times."]
   },
   "tips": [
-    {"tip": "Пишите, как выглядит готово", "example": "«Сделай промпты для Frutiger» ушло на три круга.", "try": "«Промпты для 5 объектов, как у Y2K Box, готово — когда я выбрал в Фигме»."}
+    {"tip": "Write what done looks like", "example": "\"Make prompts for the summer set\" took three rounds.", "try": "\"Prompts for 5 objects, like the spring box, done when I have picked in the design tool\"."}
   ],
   "todo": {
     "filed": [
-      {"title": "Обложки для блога, октябрь", "source": "Jira", "link": "https://example.atlassian.net/browse/ICN-1", "due": "до пятницы"},
-      {"title": "Ответить Ане про лендинг", "source": "Teams", "link": "", "due": ""}
+      {"title": "Blog covers, October", "source": "Jira", "link": "https://example.atlassian.net/browse/PRJ-1", "due": "by Friday"},
+      {"title": "Reply to Sam about the landing page", "source": "Teams", "link": "", "due": ""}
     ],
     "not_filed": [
-      {"title": "Обсудили на созвоне ретро-пак иконок, задачи нет", "source": "Granola", "why": "договорились на встрече 9 октября"}
+      {"title": "Discussed an icon retro pack on a call, no task yet", "source": "Granola", "why": "agreed at the meeting on October 9"}
     ]
   }
 }
@@ -280,6 +280,32 @@
 (() => {
   let d = {};
   try { d = JSON.parse(document.getElementById("recap-data").textContent) || {}; } catch (e) { d = {}; }
+
+  // Labels of the report: en by default, ru when the data says so (the plugin puts the hub language there as "lang").
+  const STR = {
+    en: {
+      title: "Week", your_week: "Your week", week: "Week {week}", numbers_aria: "Numbers of the week",
+      done: "Done", progress: "In progress", dropped: "Dropped", tokens: "Where the tokens went",
+      together: "How we worked together", good: "Went easily", slow: "Slowed down", tips: "What to try",
+      todo: "For this week", filed: "Already filed", notfiled: "Discussed, but no task",
+      tokens_n: "{n} tokens", first_try: "first try", next: "Next: ", bar_aria: "{pct}% of the week's tokens",
+      was: "How it went this week", try: "How to try", open: "Open",
+    },
+    ru: {
+      title: "Неделя", your_week: "Ваша неделя", week: "Неделя {week}", numbers_aria: "Цифры недели",
+      done: "Сделано", progress: "В работе", dropped: "Брошено", tokens: "Куда ушли токены",
+      together: "Как работали вместе", good: "Шло легко", slow: "Тормозило", tips: "Что попробовать",
+      todo: "На эту неделю", filed: "Уже заведено", notfiled: "Обсуждали, но задачи нет",
+      tokens_n: "{n} токенов", first_try: "с первого раза", next: "Дальше: ", bar_aria: "{pct}% токенов недели",
+      was: "Как было на этой неделе", try: "Как попробовать", open: "Открыть",
+    },
+  };
+  const base = String(d.lang || "en").split("-")[0].toLowerCase();
+  const lang = STR[base] ? base : "en";
+  const t = (key, vars) => STR[lang][key].replace(/\{(\w+)\}/g, (m, k) => (vars && vars[k] != null ? vars[k] : m));
+  document.documentElement.lang = lang;
+  document.querySelectorAll("[data-t]").forEach((n) => { n.textContent = t(n.dataset.t); });
+  document.querySelectorAll("[data-t-aria]").forEach((n) => { n.setAttribute("aria-label", t(n.dataset.tAria)); });
 
   const $ = (id) => document.getElementById(id);
   const list = (v) => (Array.isArray(v) ? v.filter(Boolean) : []);
@@ -310,14 +336,14 @@
   const count = (sec, n) => { const c = $(sec).querySelector(".count"); if (c) c.textContent = n > 1 ? String(n) : ""; };
   const safeUrl = (u) => (/^https?:\/\//i.test(text(u)) ? text(u) : "");
 
-  // шапка
+  // header
   const week = text(d.week), tldr = text(d.tldr);
-  $("week").textContent = week ? "Неделя " + week : "Ваша неделя";
-  if (week) document.title = "Неделя " + week;
+  $("week").textContent = week ? t("week", { week }) : t("your_week");
+  document.title = week ? t("week", { week }) : t("title");
   $("tldr").textContent = tldr;
   $("tldr").hidden = !tldr;
 
-  // цифры
+  // numbers
   const nums = list(d.numbers).filter((n) => text(n.value));
   nums.forEach((n) => {
     const box = el("div");
@@ -328,58 +354,58 @@
   });
   show("s-numbers", nums.length);
 
-  // сделано
+  // done
   const done = list(d.done);
-  done.forEach((t) => {
+  done.forEach((x) => {
     const li = el("li"), row = el("div", "row"), body = el("div");
-    add(body, el("p", "title", text(t.title)), meta(t.where, t.tokens && t.tokens + " токенов"),
-        text(t.story) && el("p", "story", text(t.story)));
+    add(body, el("p", "title", text(x.title)), meta(x.where, x.tokens && t("tokens_n", { n: x.tokens })),
+        text(x.story) && el("p", "story", text(x.story)));
     let tag = null;
-    if (t.first_try) { tag = el("span", "tag good"); tag.append(icon("i-check", "sm"), "с первого раза"); }
+    if (x.first_try) { tag = el("span", "tag good"); tag.append(icon("i-check", "sm"), t("first_try")); }
     add(row, body, tag);
     li.append(row);
     $("done").append(li);
   });
   show("s-done", done.length); count("s-done", done.length);
 
-  // в работе
+  // in progress
   const prog = list(d.in_progress);
-  prog.forEach((t) => {
+  prog.forEach((x) => {
     const li = el("li");
-    add(li, el("p", "title", text(t.title)), meta(t.where, t.tokens && t.tokens + " токенов"));
-    if (text(t.next)) { const p = el("p", "next"); p.append(el("b", null, "Дальше: "), text(t.next)); li.append(p); }
+    add(li, el("p", "title", text(x.title)), meta(x.where, x.tokens && t("tokens_n", { n: x.tokens })));
+    if (text(x.next)) { const p = el("p", "next"); p.append(el("b", null, t("next")), text(x.next)); li.append(p); }
     $("progress").append(li);
   });
   show("s-progress", prog.length); count("s-progress", prog.length);
 
-  // брошено
+  // dropped
   const drop = list(d.dropped);
-  drop.forEach((t) => {
+  drop.forEach((x) => {
     const li = el("li");
-    add(li, el("p", "title", text(t.title)), text(t.why) && el("p", "story", text(t.why)));
+    add(li, el("p", "title", text(x.title)), text(x.why) && el("p", "story", text(x.why)));
     $("dropped").append(li);
   });
   show("s-dropped", drop.length); count("s-dropped", drop.length);
 
-  // токены
+  // tokens
   const tok = list(d.tokens_by_task);
-  tok.forEach((t) => {
-    const share = Math.max(0, Math.min(1, Number(t.share) || 0));
+  tok.forEach((x) => {
+    const share = Math.max(0, Math.min(1, Number(x.share) || 0));
     const li = el("li"), line = el("div", "line");
     const pct = Math.round(share * 100);
-    add(line, el("p", "title", text(t.title)),
-        el("span", "val", [text(t.tokens), pct ? pct + "%" : ""].filter(Boolean).join(" · ")));
+    add(line, el("p", "title", text(x.title)),
+        el("span", "val", [text(x.tokens), pct ? pct + "%" : ""].filter(Boolean).join(" · ")));
     const bar = el("div", "bar"), fill = el("i");
     fill.style.width = (share * 100).toFixed(1) + "%";
     bar.append(fill);
     bar.setAttribute("role", "img");
-    bar.setAttribute("aria-label", pct + "% токенов недели");
+    bar.setAttribute("aria-label", t("bar_aria", { pct }));
     add(li, line, bar);
     $("tokens").append(li);
   });
   show("s-tokens", tok.length);
 
-  // вместе
+  // together
   const tg = d.together || {};
   const good = list(tg.good).map(text).filter(Boolean), slow = list(tg.slow).map(text).filter(Boolean);
   good.forEach((s) => $("good").append(el("li", null, s)));
@@ -388,41 +414,41 @@
   show("s-together", good.length || slow.length);
   if (!good.length || !slow.length) document.querySelector(".together").style.gridTemplateColumns = "1fr";
 
-  // советы
-  const tips = list(d.tips).filter((t) => text(t.tip));
-  tips.forEach((t) => {
+  // tips
+  const tips = list(d.tips).filter((x) => text(x.tip));
+  tips.forEach((x) => {
     const box = el("article", "tip"), dl = el("dl");
-    box.append(el("p", "title", text(t.tip)));
-    if (text(t.example)) add(dl, el("dt", null, "Как было на этой неделе"), el("dd", null, text(t.example)));
-    if (text(t.try)) add(dl, el("dt", null, "Как попробовать"), el("dd", "try", text(t.try)));
+    box.append(el("p", "title", text(x.tip)));
+    if (text(x.example)) add(dl, el("dt", null, t("was")), el("dd", null, text(x.example)));
+    if (text(x.try)) add(dl, el("dt", null, t("try")), el("dd", "try", text(x.try)));
     if (dl.childNodes.length) box.append(dl);
     $("tips").append(box);
   });
   show("s-tips", tips.length);
 
-  // туду
+  // todo
   const td = d.todo || {};
   const filed = list(td.filed), nf = list(td.not_filed);
-  const todoItem = (t, withLink) => {
+  const todoItem = (x, withLink) => {
     const li = el("li"), row = el("div", "row"), body = el("div");
     const m = el("p", "meta");
-    if (text(t.source)) m.append(el("span", "src", text(t.source)));
-    if (text(t.due)) m.append(el("span", "due", text(t.due)));
-    if (text(t.why)) m.append(el("span", null, text(t.why)));
-    const url = withLink && safeUrl(t.link);
+    if (text(x.source)) m.append(el("span", "src", text(x.source)));
+    if (text(x.due)) m.append(el("span", "due", text(x.due)));
+    if (text(x.why)) m.append(el("span", null, text(x.why)));
+    const url = withLink && safeUrl(x.link);
     if (url) {
-      const s = el("span"), a = el("a", "open", "Открыть");
+      const s = el("span"), a = el("a", "open", t("open"));
       a.href = url; a.target = "_blank"; a.rel = "noopener";
       a.append(icon("i-link", "sm"));
       s.append(a); m.append(s);
     }
-    add(body, el("p", "title", text(t.title)), m.childNodes.length && m);
+    add(body, el("p", "title", text(x.title)), m.childNodes.length && m);
     add(row, el("span", "check"), body);
     li.append(row);
     return li;
   };
-  filed.forEach((t) => $("filed").append(todoItem(t, true)));
-  nf.forEach((t) => $("notfiled").append(todoItem(t, false)));
+  filed.forEach((x) => $("filed").append(todoItem(x, true)));
+  nf.forEach((x) => $("notfiled").append(todoItem(x, false)));
   show("filed-sub", filed.length); show("filed", filed.length);
   show("notfiled-sub", nf.length); show("notfiled", nf.length);
   show("s-todo", filed.length || nf.length);
