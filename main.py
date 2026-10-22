@@ -36,6 +36,9 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 STATE_DIR = os.environ.get("HUB_STATE_DIR") or open(os.path.join(catalog.config_dir(), "state-dir")).read().strip()
 NAME = os.environ.get("HUB_EXTENSION", "week-recap")
 HOME = os.path.join(STATE_DIR, "week-recap")
+LANG_FILE = os.path.join(HOME, "lang.json")   # the last language the hub really named
+LANG_PAUSES = (0.2, 0.5)   # pauses before asking the hub for its language again
+_known = None
 OUT = os.path.join(HERE, "web", "data.json")   # for the view - changes a couple of times a week, reloading the tab does no harm
 EVERY = 60
 WAIT = 6 * 3600          # no draft in 6 h - the owner gets the numbers only
@@ -77,13 +80,43 @@ STR = {
 }
 
 
-def _lang():
-    """Hub language: core.i18n.current() (hub.json language -> owner language -> en), then env HUB_LANG, then en."""
+def _hub_language():
+    """The language the hub names right now: hub.json language, else the owner's language from state.json. None - the hub did
+    not answer (a read failed, nothing is named, an old core without languages). Not core.i18n.current(): a failed read makes
+    it answer en and it keeps that for the whole life of the process (22.10: the 9:00 recap asked for English)."""
     try:
-        from core import i18n
-        return i18n.current()
+        from core import catalog as settings, i18n
+        try:
+            picked = settings.load_config(STATE_DIR).get("language")
+        except (OSError, ValueError):
+            picked = None
+        return picked or i18n.state_lang(i18n.saved_state(STATE_DIR)) or None
     except Exception:   # noqa: BLE001 - an old core without languages
-        return os.environ.get("HUB_LANG") or "en"
+        return None
+
+
+def _lang():
+    """Hub language, read at the moment of use; the hub did not answer (a read raced with a write) - asked again, then
+    the last language it really named (kept in a file: survives a restart), env HUB_LANG, en - and a line to stderr."""
+    global _known
+    lang = _hub_language()
+    for pause in LANG_PAUSES:
+        if lang:
+            break
+        time.sleep(pause)
+        lang = _hub_language()
+    if lang:
+        if lang != _known:
+            _known = lang
+            try:
+                write(LANG_FILE, {"lang": lang})
+            except OSError:
+                pass
+        return lang
+    fallback = _known or str(read(LANG_FILE, {}).get("lang") or "") or os.environ.get("HUB_LANG") or "en"
+    print(f"{NAME}: the hub language is not named (hub.json and state.json unreadable or empty), using {fallback}",
+          file=sys.stderr, flush=True)
+    return fallback
 
 
 def tr(lang, key, **params):

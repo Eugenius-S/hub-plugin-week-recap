@@ -1,7 +1,9 @@
 """Week review on a made-up journal: week borders, repeats from archives, numbers, who gets what and when, what the owner
 gets, and the en/ru switching of everything the owner reads. Run: python3 -m unittest discover -s tests (with PYTHONPATH
 pointing at the hub code)."""
+import contextlib
 import datetime
+import io
 import json
 import os
 import re
@@ -675,15 +677,60 @@ class Language(unittest.TestCase):
         return main.tick(now, self.mine, {"sessions": sessions, "feeds": {"week-recap": list(feed)}}, self.send,
                          self.state, self.home)
 
-    def test_the_hub_language_comes_from_the_core_then_the_environment_then_english(self):
-        with mock.patch("core.i18n.current", return_value="ru"):
+    def hub_says(self, config=None, facts=None, saved=None):
+        """What the plugin reads: hub.json (config), then state.json (facts); a list in saved - one answer per read."""
+        stack = [mock.patch.object(main, "LANG_PAUSES", (0, 0)), mock.patch.object(main, "_known", None),
+                 mock.patch.object(main, "LANG_FILE", os.path.join(self.home, "lang.json")),
+                 mock.patch("core.catalog.load_config", return_value=config or {}),
+                 mock.patch("core.i18n.saved_state", side_effect=saved) if saved is not None
+                 else mock.patch("core.i18n.saved_state", return_value=facts)]
+        ctx = contextlib.ExitStack()
+        for m in stack:
+            ctx.enter_context(m)
+        return ctx
+
+    def test_the_hub_language_is_hub_json_then_the_owner_language(self):
+        owner = {"owner": {"lang": "ru"}, "ui_lang_default": None}
+        with self.hub_says({"language": "ru"}):
             self.assertEqual(main._lang(), "ru")
-        with mock.patch("core.i18n.current", side_effect=RuntimeError("no hub language")):
-            with mock.patch.dict(os.environ, {"HUB_LANG": "ru"}):
+        with self.hub_says({"language": "en"}, owner):
+            self.assertEqual(main._lang(), "en")
+        with self.hub_says({}, owner):
+            self.assertEqual(main._lang(), "ru")
+
+    def test_a_failed_read_is_asked_again_and_english_is_not_kept(self):
+        # 22.10: state.json read raced with its replacement, core.i18n.current() said en and kept it for the whole process
+        owner = {"owner": {"lang": "ru"}, "ui_lang_default": None}
+        with self.hub_says(saved=[None, None, owner]):
+            self.assertEqual(main._lang(), "ru")
+        with mock.patch("core.i18n._current", None), mock.patch.dict(os.environ, {"HUB_LANG": ""}):
+            with self.hub_says(saved=[None, owner, owner]):
                 self.assertEqual(main._lang(), "ru")
-            env = {k: v for k, v in os.environ.items() if k != "HUB_LANG"}
+                self.assertEqual(main._lang(), "ru")
+
+    def test_the_hub_does_not_answer_the_last_named_language_goes_and_stderr_says_so(self):
+        owner = {"owner": {"lang": "ru"}, "ui_lang_default": None}
+        err = io.StringIO()
+        with self.hub_says(saved=[owner, None, None, None, None, None, None]):
+            self.assertEqual(main._lang(), "ru")
+            with mock.patch("sys.stderr", err):
+                self.assertEqual(main._lang(), "ru")
+        self.assertIn("not named", err.getvalue())
+        with self.hub_says():   # a restart in the middle of such a failure: the file remembers it
+            with open(main.LANG_FILE, "w", encoding="utf-8") as f:
+                json.dump({"lang": "ru"}, f)
+            with mock.patch("sys.stderr", io.StringIO()):
+                self.assertEqual(main._lang(), "ru")
+
+    def test_nothing_is_known_env_then_english(self):
+        env = {k: v for k, v in os.environ.items() if k != "HUB_LANG"}
+        with self.hub_says(), mock.patch("sys.stderr", io.StringIO()):
+            if os.path.exists(main.LANG_FILE):
+                os.unlink(main.LANG_FILE)
             with mock.patch.dict(os.environ, env, clear=True):
                 self.assertEqual(main._lang(), "en")
+            with mock.patch.dict(os.environ, {"HUB_LANG": "ru"}):
+                self.assertEqual(main._lang(), "ru")
 
     def test_prompts_are_english_and_name_the_report_language(self):
         args = ("2026-W41", "Oct 5–11", "/d.md", "/w.md", "/draft.json", "/sample.json")
@@ -794,7 +841,7 @@ class Language(unittest.TestCase):
         for key in ("description", "why"):
             self.assertNotRegex(man[key], CYRILLIC, key)
             self.assertRegex(man["i18n"]["ru"][key], CYRILLIC, key)
-        self.assertEqual(man["version"], "2.4.0")
+        self.assertEqual(man["version"], "2.4.1")
 
 
 def node(prog):
