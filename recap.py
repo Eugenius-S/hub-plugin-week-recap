@@ -612,26 +612,28 @@ DAY_DEFAULT = {"on": True, "hour": 9, "minute": 0, "zone": None}   # every day a
 # "day: 08:30 [zone]" or "day: off" - a post of the owner (or the hub) in the plugin channel, like "schedule:" of the week;
 # accepted in both languages whatever the hub language is
 DAY_SET = re.compile(r"^\s*(?:day|день):\s*(?:(off|выкл)|(\d{1,2}):(\d{2}))(?:\s+(\S+))?\s*$", re.I)
-DAY_TOP = 6                # tasks of a hub in the owner's text; the rest - "and N more"
+DAY_TOP = 4                # items in one section of the owner's text; the rest - "and N more"
+DAY_CUT = 70               # an item's text, characters
 DAY_STALE = 2 * 86400      # another hub's upload is older - its data is stale (the hub is off?)
 
-# What the owner reads in the daily recap without the analyst, by hub language ({name} placeholders).
+# What the owner reads in the daily recap without the analyst, by hub language ({name} placeholders). The same frame as the
+# analyst's text: sections by status, an item is "- **affair**: gist", the hub's own title is set by the hub.
 DAYW = {
     "en": {
-        "head": "In progress, {date}:", "mine": "This hub", "hub": "Hub {name}",
-        "count": "{name}: tasks in progress - {n}{stale}", "none": "{name}: nothing hangs{stale}",
-        "stale": " (old data - the hub has not uploaded for long)", "task": "• {text} - {who}, {state}, {age}",
-        "more": "• and {n} more", "backlog": "In the agents' backlogs: {n} ({dirs})",
-        "nosnap": "Hub {name}: no upload of open work yet - its tasks are not here.",
+        "wait": "**⚡ Waiting for you · {n}**", "work": "**🛠 In progress · {n}**", "stuck": "**⏳ No movement · {n}**",
+        "task": "- **{text}**: {age}{hub}", "stopped": "- **{text}**: broke off {age} ago{hub}", "hub": ", {name}",
+        "more": "- and {n} more", "backlog": "**📋 Agents' backlogs**: {n} ({dirs})",
+        "none": "Nothing in progress.",
+        "nodata": "*No data: {what}*", "stale": "hub {name} has not uploaded for long", "nosnap": "hub {name} has not uploaded yet",
         "states": {"working": "in progress", "waiting-owner": "waits for you", "stopped": "broke off"},
         "hours": "{n} h", "days": "{n} d", "title": "In progress · {date}",
     },
     "ru": {
-        "head": "Что в работе, {date}:", "mine": "Этот хаб", "hub": "Хаб {name}",
-        "count": "{name}: задач в работе — {n}{stale}", "none": "{name}: ничего не висит{stale}",
-        "stale": " (данные старые — хаб давно не выгружал)", "task": "• {text} — {who}, {state}, {age}",
-        "more": "• и ещё {n}", "backlog": "В бэклогах агентов: {n} ({dirs})",
-        "nosnap": "Хаб {name}: выгрузки открытого пока нет — его задач здесь нет.",
+        "wait": "**⚡ Ждут тебя · {n}**", "work": "**🛠 В работе · {n}**", "stuck": "**⏳ Без движения · {n}**",
+        "task": "- **{text}**: {age}{hub}", "stopped": "- **{text}**: оборвалась {age} назад{hub}", "hub": ", {name}",
+        "more": "- и ещё {n}", "backlog": "**📋 В бэклогах агентов**: {n} ({dirs})",
+        "none": "Ничего не висит.",
+        "nodata": "*Нет данных: {what}*", "stale": "хаб {name} давно не выгружал", "nosnap": "хаб {name} ещё не выгружал",
         "states": {"working": "в работе", "waiting-owner": "ждёт тебя", "stopped": "оборвалась"},
         "hours": "{n} ч", "days": "{n} дн.", "title": "Что в работе · {date}",
     },
@@ -741,26 +743,40 @@ def day_digest(label, mine, theirs, now, zone, known_hosts=(), jira=None):
 
 
 def day_text(label, mine, theirs, now, zone, known_hosts=(), lang="en"):
-    """The day's recap without a reviewer - the owner gets only what the plugin knows: what is in progress by hub and in the
-    agents' backlogs. No ids and paths, up to ~15 lines; the line about Jira (why it is missing) is added by the caller."""
+    """The day's recap without a reviewer - the owner gets only what the plugin knows: what waits for them, what is in progress
+    and what broke off, merged over all hubs, and the agents' backlogs. No meetings, Jira, ids and paths; the title with the date
+    is set by the hub. What did not come in - one italic line at the end."""
     w = DAYW[norm(lang)]
-    lines = [w["head"].format(date=day_date(label, lang))]
-    snaps = ([(w["mine"], mine)] if mine else []) + [(w["hub"].format(name=_hub(h)), s) for h, s in theirs.items()]
-    for name, snap in snaps:
-        tasks = snap.get("tasks") or []
-        stale = w["stale"] if now - (snap.get("ts") or 0) >= DAY_STALE else ""
-        lines.append(w["count"].format(name=name, n=len(tasks), stale=stale) if tasks
-                     else w["none"].format(name=name, stale=stale))
-        for t in tasks[:DAY_TOP]:
-            lines.append(w["task"].format(text=_cut(t.get("text"), 90) or t["session"], who=t["session"],
-                                          state=w["states"].get(t["state"], ""), age=_age(t.get("created"), now, lang)))
-        if len(tasks) > DAY_TOP:
-            lines.append(w["more"].format(n=len(tasks) - DAY_TOP))
-        back = [(slug, x) for slug, xs in (snap.get("backlog") or {}).items() for x in xs]
-        if back:
-            lines.append(w["backlog"].format(n=len(back), dirs=", ".join(sorted({s for s, _ in back}))))
+    snaps = ([mine] if mine else []) + list(theirs.values())
+    several = len(snaps) > 1
+    groups = {"waiting-owner": [], "working": [], "stopped": []}
+    for snap in snaps:
+        for t in snap.get("tasks") or []:
+            if t.get("state") in groups:
+                groups[t["state"]].append((snap, t))
+    lines = []
+    for state, key in (("waiting-owner", "wait"), ("working", "work"), ("stopped", "stuck")):
+        items = sorted(groups[state], key=lambda x: x[1].get("created") or now)
+        if not items:
+            continue
+        lines += ["", w[key].format(n=len(items))]
+        for snap, t in items[:DAY_TOP]:
+            lines.append(w["stopped" if state == "stopped" else "task"].format(
+                text=_cut(t.get("text"), DAY_CUT) or t["session"], age=_age(t.get("created"), now, lang),
+                hub=w["hub"].format(name=_hub(snap.get("host") or "")) if several else ""))
+        if len(items) > DAY_TOP:
+            lines.append(w["more"].format(n=len(items) - DAY_TOP))
+    back = sorted({slug for snap in snaps for slug, xs in (snap.get("backlog") or {}).items() if xs})
+    count = sum(len(xs) for snap in snaps for xs in (snap.get("backlog") or {}).values())
+    if back:
+        lines += ["", w["backlog"].format(n=count, dirs=", ".join(back))]
+    elif not any(groups.values()) and snaps:
+        lines += ["", w["none"]]
     seen = {h.split(".")[0] for h in theirs} | ({mine["host"].split(".")[0]} if mine else set())
-    lines += [w["nosnap"].format(name=_hub(h)) for h in sorted(known_hosts) if h.split(".")[0] not in seen]
+    miss = [w["stale"].format(name=_hub(s.get("host") or "")) for s in snaps if now - (s.get("ts") or 0) >= DAY_STALE]
+    miss += [w["nosnap"].format(name=_hub(h)) for h in sorted(known_hosts) if h.split(".")[0] not in seen]
+    if miss:
+        lines += ["", w["nodata"].format(what=", ".join(miss))]
     return "\n".join(lines)
 
 
@@ -787,25 +803,37 @@ def day_prompt(label, digest_path, out_path, jira, lang="en"):
         f"1. Meetings since {since} until now, in the machine's time zone (Granola, MCP granola: `list_meetings` with "
         "time_range custom and custom_start/custom_end, then `get_meetings` for the ids in one call). For every meeting - what "
         "was decided, one short line per decision (or one line per meeting when there is no decision), no retelling. "
-        "No meetings - skip the block. No access - `hub tools request granola \"daily recap\"` and a line in the text that "
-        "Granola is not in.\n"
+        "No meetings - skip the block. No access - `hub tools request granola \"daily recap\"` and name Granola in the "
+        "*No data* line.\n"
         "2. What is expected of the owner today and tomorrow. Meetings: the calendar (MCP ms365, read only: `get-calendar-view` "
         "from the start of today to the end of tomorrow, skip `isCancelled` ones) - for each live meeting (skip the stand-ups with "
         "nothing to prepare) look for what the owner promised or what is expected of them there: their action items and open "
         "promises in Granola notes of earlier meetings of the same series (`list_meetings`, `get_meetings`), the Teams chat of "
         "the meeting or of its team (`list-chats`, `list-chat-messages`: the last days, somebody asks the owner for something or "
         "waits for an answer) and the hub's Teams feed (`hub feed teams`). Only what is really asked or promised and not yet "
-        "done. No access to ms365 - `hub tools request ms365 \"daily recap\"` and a line that Teams is not in.\n"
+        "done. No access to ms365 - `hub tools request ms365 \"daily recap\"` and name Teams in the *No data* line.\n"
         f"3. {where}Only the owner's tasks in the open sprints (JQL like `assignee = currentUser() AND "
         "sprint in openSprints() AND statusCategory != Done ORDER BY updated`), what hangs longest and what waits for them. "
         "Tasks with no sprint (the backlog) and old ones - do not mention at all, not even their number. No access - `hub tools request atlassian \"daily recap\"` and "
-        "a line in the text that Jira is not in.\n"
+        "name Jira in the *No data* line.\n"
         "4. Merge the hubs' tasks and the agents' backlogs into their human affairs (one affair - one line, a duplicate of one "
-        "piece of work on two hubs - one line). What hangs longest goes first. Old snapshots and hubs with no snapshot - one line.\n"
-        "5. The text, up to ~25 lines, blocks in this order: \"Yesterday at meetings\" (the gist first), \"Waiting for you\" "
-        "(one line per item: `<meeting, when>: <what to bring>`; nothing found - no block at all), hubs, Jira, agents; "
-        "short, the way a colleague says in the morning what stands where. No ids (dN, mN), paths, branches, model names or how "
-        "the hub works.\n"
+        "piece of work on two hubs - one line). What hangs longest goes first. Old snapshots and hubs with no snapshot go into the *No data* line.\n"
+        "5. The text in Markdown, up to ~20 lines. The hub sets the title \"🔔 In progress · <date>\" itself: do not repeat it, "
+        "start the text with an empty line. Sections in this order; a section with nothing in it is left out; N is the number of "
+        "its items:\n"
+        "`**⚡ Waiting for you · N**`: decisions and meetings where something is expected of the owner; a meeting reads "
+        "`- **<meeting>, <when>**: <what to bring>`.\n"
+        "`**🗓 Decided yesterday**`: only if there were meetings, one line per decision.\n"
+        "`**🛠 In progress · N**`: the merged affairs of all hubs and agents.\n"
+        "`**⏳ No movement · N**`: what hangs longest, ending with `since DD.MM`; Jira tasks that hang go here too.\n"
+        "`**📋 Jira**: N tasks in the sprint, M not started`: one line.\n"
+        "`*No data: <what>*`: last, in italics, one line naming what did not come in (meetings, calendar, Teams, Jira, a hub "
+        "whose upload is old or missing). Everything came in: no such line.\n"
+        "One item is one affair: `- **<the affair, 2-4 words>**: <the gist>`, up to ~70 characters together, bold only the "
+        "affair's name. At most 4 items in a section, then `- and N more`. An empty line between sections. A status is one of: "
+        "in progress, waits for you, no movement since DD.MM. No session or agent names, ids (dN, mN), paths, branches, model "
+        "names or how the hub works; a hub's name only when it matters, at the end of the line: `, Mac`. Short, the way a "
+        "colleague tells you in the morning what stands where.\n"
         f"{_write_in_text(lang)}\n"
         f"The result is the file `{out_path}`: JSON {{\"text\": \"<the recap as one text, lines separated by \\n>\"}}. "
         "The result of your turn is one line: \"done\".")
