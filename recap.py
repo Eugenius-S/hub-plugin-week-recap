@@ -623,20 +623,22 @@ DAYW = {
     "en": {
         "wait": "**⚡ Waiting for you · {n}**", "work": "**🛠 In progress · {n}**", "stuck": "**⏳ No movement · {n}**",
         "task": "- **{name}**: {gist}{age}{hub}", "stopped": "- **{name}**: {gist}since {date}{hub}", "hub": ", {name}",
-        "more": "- and {n} more", "backlog": "**📋 Agents' backlogs**: {n} ({dirs})",
+        "more": "- and {n} more", "backlog": "**📋 Agents' backlogs**: {n}, for {dirs}",
         "none": "Nothing in progress.", "sources": "meetings, calendar, Teams, Jira",
         "nodata": "*No data: {what}*", "stale": "hub {name} has not uploaded for long", "nosnap": "hub {name} has not uploaded yet",
+        "stale_many": "hubs {name} have not uploaded for long", "nosnap_many": "hubs {name} have not uploaded yet", "and": " and ",
         "states": {"working": "in progress", "waiting-owner": "waits for you", "stopped": "broke off"},
         "hours": "{n} h", "days": "{n} d", "title": "In progress · {date}",
     },
     "ru": {
         "wait": "**⚡ Ждут тебя · {n}**", "work": "**🛠 В работе · {n}**", "stuck": "**⏳ Без движения · {n}**",
         "task": "- **{name}**: {gist}{age}{hub}", "stopped": "- **{name}**: {gist}с {date}{hub}", "hub": ", {name}",
-        "more": "- и ещё {n}", "backlog": "**📋 В бэклогах агентов**: {n} ({dirs})",
+        "more": "- и ещё {n}", "backlog": "**📋 В бэклогах агентов**: {n}, у {dirs}",
         "none": "Ничего не висит.", "sources": "встречи, календарь, Teams, Jira",
         "nodata": "*Нет данных: {what}*", "stale": "хаб {name} давно не выгружал", "nosnap": "хаб {name} ещё не выгружал",
+        "stale_many": "хабы {name} давно не выгружали", "nosnap_many": "хабы {name} ещё не выгружали", "and": " и ",
         "states": {"working": "в работе", "waiting-owner": "ждёт тебя", "stopped": "оборвалась"},
-        "hours": "{n} ч", "days": "{n} дн.", "title": "Что в работе · {date}",
+        "hours": "{n} ч", "days": "{n} д", "title": "Что в работе · {date}",
     },
 }
 
@@ -791,8 +793,11 @@ def day_text(label, mine, theirs, now, zone, known_hosts=(), lang="en"):
         lines += ["", w["none"]]
     seen = {h.split(".")[0] for h in theirs} | ({mine["host"].split(".")[0]} if mine else set())
     miss = [w["sources"]]   # the text is the plugin's own - meetings, Teams and Jira are not in it, however it came to be
-    miss += [w["stale"].format(name=_hub(s.get("host") or "")) for s in snaps if now - (s.get("ts") or 0) >= DAY_STALE]
-    miss += [w["nosnap"].format(name=_hub(h)) for h in sorted(known_hosts) if h.split(".")[0] not in seen]
+    for key, names in (("stale", [_hub(s.get("host") or "") for s in snaps if now - (s.get("ts") or 0) >= DAY_STALE]),
+                       ("nosnap", [_hub(h) for h in sorted(known_hosts) if h.split(".")[0] not in seen])):
+        if names:   # hubs of one kind go in one phrase: "hubs Win and Old have not uploaded for long"
+            who = ", ".join(names[:-1]) + w["and"] + names[-1] if len(names) > 1 else names[0]
+            miss.append(w[key + ("_many" if len(names) > 1 else "")].format(name=who))
     lines += ["", w["nodata"].format(what=", ".join(miss))]
     return "\n".join(lines)
 

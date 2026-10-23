@@ -509,10 +509,10 @@ class Day(unittest.TestCase):
         self.assertEqual(text.count("- и ещё 3"), 1)           # DAY_TOP = 4: из семи ждущих — четыре и «и ещё 3»
         self.assertLess(text.index("правка 8"), text.index("правка 7"))   # дольше висит — выше
         self.assertNotIn("правка 2", text)
-        self.assertIn("- **ролики трекера**: 5 дн., Mac", text)  # хабов два — хаб в конце строки
+        self.assertIn("- **ролики трекера**: 5 д, Mac", text)  # хабов два — хаб в конце строки
         self.assertIn("- **сборка релиза плагина**: ", text)   # жирным — имя до двоеточия
         self.assertIn("с 19.10, Mac", text)                      # «Без движения» — дата, не «назад»
-        self.assertIn("**📋 В бэклогах агентов**: 1 (ads)", text)
+        self.assertIn("**📋 В бэклогах агентов**: 1, у ads", text)
         self.assertTrue(lines[-1].startswith("*Нет данных: "), lines[-1])   # одной курсивной строкой, последней
         self.assertIn("хаб Win давно не выгружал, хаб Old ещё не выгружал", lines[-1])
         self.assertNotIn("хаб Mac", text)
@@ -530,6 +530,13 @@ class Day(unittest.TestCase):
         self.assertEqual(text, "\n**🛠 В работе · 1**\n- **правки текстов**: 2 ч\n\n*Нет данных: встречи, календарь, Teams, Jira*")
         self.assertEqual(recap.day_text("2026-10-21", snap("Mac.local", self.NOW), {}, self.NOW, ZONE, {"Mac.local"}, "ru"),
                          "\nНичего не висит.\n\n*Нет данных: встречи, календарь, Teams, Jira*")
+
+    def test_several_silent_hubs_go_in_one_phrase(self):
+        mine = snap("Mac.local", self.NOW, [])
+        text = recap.day_text("2026-10-21", mine, {}, self.NOW, ZONE, {"Win", "Old", "Mac.local"}, "ru")
+        self.assertTrue(text.endswith("*Нет данных: встречи, календарь, Teams, Jira, хабы Old и Win ещё не выгружали*"), text)
+        text = recap.day_text("2026-10-21", mine, {}, self.NOW, ZONE, {"Win", "Old", "Mac.local"})
+        self.assertTrue(text.endswith("hubs Old and Win have not uploaded yet*"), text)
 
     def test_text_in_english_by_default(self):
         mine = snap("Mac.local", self.NOW, [task("d1", "gen", "working", self.NOW - 5 * 86400, "clips")])
@@ -643,7 +650,7 @@ class DayFlow(unittest.TestCase):
         (_, _, data), = [a for a in self.sent if a[0] == "owner.notify"]
         self.assertEqual(data["title"], "Что в работе · 21 октября")
         self.assertIn("**🛠 В работе · 2**", data["text"])
-        self.assertIn("- **ролик**: 1 дн., Win", data["text"])
+        self.assertIn("- **ролик**: 1 д, Win", data["text"])
         self.assertTrue(data["text"].endswith("*Нет данных: встречи, календарь, Teams, Jira*"))
         self.assertNotIn("analyst", data["text"])
         self.assertTrue(data["asked"])   # telegram.brief глушит owner.notify без asked/urgent
