@@ -614,6 +614,7 @@ DAY_DEFAULT = {"on": True, "hour": 9, "minute": 0, "zone": None}   # every day a
 DAY_SET = re.compile(r"^\s*(?:day|день):\s*(?:(off|выкл)|(\d{1,2}):(\d{2}))(?:\s+(\S+))?\s*$", re.I)
 DAY_TOP = 4                # items in one section of the owner's text; the rest - "and N more"
 DAY_CUT = 70               # an item's text, characters
+DAY_NAME = 32              # the affair's name (the bold part) up to this many characters, if the task text has ": "
 DAY_STALE = 2 * 86400      # another hub's upload is older - its data is stale (the hub is off?)
 
 # What the owner reads in the daily recap without the analyst, by hub language ({name} placeholders). The same frame as the
@@ -621,18 +622,18 @@ DAY_STALE = 2 * 86400      # another hub's upload is older - its data is stale (
 DAYW = {
     "en": {
         "wait": "**⚡ Waiting for you · {n}**", "work": "**🛠 In progress · {n}**", "stuck": "**⏳ No movement · {n}**",
-        "task": "- **{text}**: {age}{hub}", "stopped": "- **{text}**: broke off {age} ago{hub}", "hub": ", {name}",
+        "task": "- **{name}**: {gist}{age}{hub}", "stopped": "- **{name}**: {gist}since {date}{hub}", "hub": ", {name}",
         "more": "- and {n} more", "backlog": "**📋 Agents' backlogs**: {n} ({dirs})",
-        "none": "Nothing in progress.",
+        "none": "Nothing in progress.", "sources": "meetings, calendar, Teams, Jira",
         "nodata": "*No data: {what}*", "stale": "hub {name} has not uploaded for long", "nosnap": "hub {name} has not uploaded yet",
         "states": {"working": "in progress", "waiting-owner": "waits for you", "stopped": "broke off"},
         "hours": "{n} h", "days": "{n} d", "title": "In progress · {date}",
     },
     "ru": {
         "wait": "**⚡ Ждут тебя · {n}**", "work": "**🛠 В работе · {n}**", "stuck": "**⏳ Без движения · {n}**",
-        "task": "- **{text}**: {age}{hub}", "stopped": "- **{text}**: оборвалась {age} назад{hub}", "hub": ", {name}",
+        "task": "- **{name}**: {gist}{age}{hub}", "stopped": "- **{name}**: {gist}с {date}{hub}", "hub": ", {name}",
         "more": "- и ещё {n}", "backlog": "**📋 В бэклогах агентов**: {n} ({dirs})",
-        "none": "Ничего не висит.",
+        "none": "Ничего не висит.", "sources": "встречи, календарь, Teams, Jira",
         "nodata": "*Нет данных: {what}*", "stale": "хаб {name} давно не выгружал", "nosnap": "хаб {name} ещё не выгружал",
         "states": {"working": "в работе", "waiting-owner": "ждёт тебя", "stopped": "оборвалась"},
         "hours": "{n} ч", "days": "{n} дн.", "title": "Что в работе · {date}",
@@ -702,7 +703,20 @@ def _age(then, now, lang="en"):
         return "—"
     h = max(0, now - then) / 3600
     w = DAYW[norm(lang)]
-    return w["hours"].format(n=round(h)) if h < 48 else w["days"].format(n=round(h / 24))
+    return w["hours"].format(n=round(h)) if h < 24 else w["days"].format(n=round(h / 24))
+
+
+def _name_gist(text, fallback):
+    """The affair's name and the gist from a task's text: up to ": " or " — " (if that is within DAY_NAME characters) is the name,
+    the rest is the gist; no such mark - a short text is all name, a long one has the first three words as the name."""
+    text = _cut(text, DAY_CUT) or fallback
+    m = re.search(r": | — ", text[:DAY_NAME + 2])
+    if m and m.start() <= DAY_NAME:
+        return text[:m.start()], text[m.end():].strip()
+    if len(text) <= DAY_NAME:
+        return text, ""
+    words = text.split()
+    return " ".join(words[:3]), " ".join(words[3:])
 
 
 def _hub(host):
@@ -745,7 +759,7 @@ def day_digest(label, mine, theirs, now, zone, known_hosts=(), jira=None):
 def day_text(label, mine, theirs, now, zone, known_hosts=(), lang="en"):
     """The day's recap without a reviewer - the owner gets only what the plugin knows: what waits for them, what is in progress
     and what broke off, merged over all hubs, and the agents' backlogs. No meetings, Jira, ids and paths; the title with the date
-    is set by the hub. What did not come in - one italic line at the end."""
+    is set by the hub. What did not come in (it is always meetings, calendar, Teams, Jira) - one italic line at the end."""
     w = DAYW[norm(lang)]
     snaps = ([mine] if mine else []) + list(theirs.values())
     several = len(snaps) > 1
@@ -761,8 +775,11 @@ def day_text(label, mine, theirs, now, zone, known_hosts=(), lang="en"):
             continue
         lines += ["", w[key].format(n=len(items))]
         for snap, t in items[:DAY_TOP]:
+            name, gist = _name_gist(t.get("text"), t["session"])
+            when = t.get("since") or t.get("created")
             lines.append(w["stopped" if state == "stopped" else "task"].format(
-                text=_cut(t.get("text"), DAY_CUT) or t["session"], age=_age(t.get("created"), now, lang),
+                name=name, gist=gist + ", " if gist else "", age=_age(t.get("created"), now, lang),
+                date=datetime.datetime.fromtimestamp(when or now, zone).strftime("%d.%m"),
                 hub=w["hub"].format(name=_hub(snap.get("host") or "")) if several else ""))
         if len(items) > DAY_TOP:
             lines.append(w["more"].format(n=len(items) - DAY_TOP))
@@ -773,10 +790,10 @@ def day_text(label, mine, theirs, now, zone, known_hosts=(), lang="en"):
     elif not any(groups.values()) and snaps:
         lines += ["", w["none"]]
     seen = {h.split(".")[0] for h in theirs} | ({mine["host"].split(".")[0]} if mine else set())
-    miss = [w["stale"].format(name=_hub(s.get("host") or "")) for s in snaps if now - (s.get("ts") or 0) >= DAY_STALE]
+    miss = [w["sources"]]   # the text is the plugin's own - meetings, Teams and Jira are not in it, however it came to be
+    miss += [w["stale"].format(name=_hub(s.get("host") or "")) for s in snaps if now - (s.get("ts") or 0) >= DAY_STALE]
     miss += [w["nosnap"].format(name=_hub(h)) for h in sorted(known_hosts) if h.split(".")[0] not in seen]
-    if miss:
-        lines += ["", w["nodata"].format(what=", ".join(miss))]
+    lines += ["", w["nodata"].format(what=", ".join(miss))]
     return "\n".join(lines)
 
 

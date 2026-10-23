@@ -496,7 +496,7 @@ class Day(unittest.TestCase):
     def test_text_is_short_oldest_first_and_says_what_is_missing(self):
         mine = snap("Mac.local", self.NOW, [task("d1", "gen", "working", self.NOW - 5 * 86400, "ролики трекера")]
                     + [task(f"d{i}", "dev", "waiting-owner", self.NOW - 3600 * i, f"правка {i}") for i in range(2, 9)]
-                    + [task("d9", "dev", "stopped", self.NOW - 2 * 86400, "сборка " + "я" * 90)],
+                    + [task("d9", "dev", "stopped", self.NOW - 2 * 86400, "сборка релиза плагина: " + "я " * 40)],
                     {"ads": [{"id": "TASK-1", "title": "сториборд", "status": "To Do"}]})
         win = snap("Win", self.NOW - 4 * 86400, [])
         text = recap.day_text("2026-10-21", mine, {"Win": win}, self.NOW, ZONE, {"Win", "Mac.local", "Old"}, "ru")
@@ -510,7 +510,8 @@ class Day(unittest.TestCase):
         self.assertLess(text.index("правка 8"), text.index("правка 7"))   # дольше висит — выше
         self.assertNotIn("правка 2", text)
         self.assertIn("- **ролики трекера**: 5 дн., Mac", text)  # хабов два — хаб в конце строки
-        self.assertIn("**: оборвалась 2 дн. назад, Mac", text)
+        self.assertIn("- **сборка релиза плагина**: ", text)   # жирным — имя до двоеточия
+        self.assertIn("с 19.10, Mac", text)                      # «Без движения» — дата, не «назад»
         self.assertIn("**📋 В бэклогах агентов**: 1 (ads)", text)
         self.assertTrue(lines[-1].startswith("*Нет данных: "), lines[-1])   # одной курсивной строкой, последней
         self.assertIn("хаб Win давно не выгружал, хаб Old ещё не выгружал", lines[-1])
@@ -526,16 +527,16 @@ class Day(unittest.TestCase):
     def test_one_hub_has_no_hub_name_and_an_empty_section_is_left_out(self):
         mine = snap("Mac.local", self.NOW, [task("d1", "gen", "working", self.NOW - 7200, "правки текстов")])
         text = recap.day_text("2026-10-21", mine, {}, self.NOW, ZONE, {"Mac.local"}, "ru")
-        self.assertEqual(text, "\n**🛠 В работе · 1**\n- **правки текстов**: 2 ч")
+        self.assertEqual(text, "\n**🛠 В работе · 1**\n- **правки текстов**: 2 ч\n\n*Нет данных: встречи, календарь, Teams, Jira*")
         self.assertEqual(recap.day_text("2026-10-21", snap("Mac.local", self.NOW), {}, self.NOW, ZONE, {"Mac.local"}, "ru"),
-                         "\nНичего не висит.")
+                         "\nНичего не висит.\n\n*Нет данных: встречи, календарь, Teams, Jira*")
 
     def test_text_in_english_by_default(self):
         mine = snap("Mac.local", self.NOW, [task("d1", "gen", "working", self.NOW - 5 * 86400, "clips")])
         text = recap.day_text("2026-10-21", mine, {}, self.NOW, ZONE, {"Win"})
         self.assertIn("**🛠 In progress · 1**", text)
         self.assertIn("- **clips**: 5 d", text)
-        self.assertTrue(text.endswith("*No data: hub Win has not uploaded yet*"))
+        self.assertTrue(text.endswith("*No data: meetings, calendar, Teams, Jira, hub Win has not uploaded yet*"))
         self.assertNotRegex(text, "[А-Яа-я]")
 
     def test_digest_for_the_analyst_names_hubs_without_a_snapshot(self):
@@ -630,9 +631,10 @@ class DayFlow(unittest.TestCase):
         notes = [a for a in self.sent if a[0] == "owner.notify"]
         self.assertEqual(len(notes), 1)
         self.assertIn("**🛠 In progress · 2**", notes[0][2]["text"])
-        self.assertIn("- **ролик**: 24 h, Win", notes[0][2]["text"])
+        self.assertIn("- **ролик**: 1 d, Win", notes[0][2]["text"])
         self.assertIn("- **наше**: 2 h, Mac", notes[0][2]["text"])
-        self.assertIn("No recap from analyst", notes[0][2]["text"])
+        self.assertTrue(notes[0][2]["text"].endswith("*No data: meetings, calendar, Teams, Jira*"))
+        self.assertNotIn("analyst", notes[0][2]["text"])
 
     def test_the_plugin_text_goes_out_in_the_hub_language(self):
         with say("ru"):
@@ -641,15 +643,16 @@ class DayFlow(unittest.TestCase):
         (_, _, data), = [a for a in self.sent if a[0] == "owner.notify"]
         self.assertEqual(data["title"], "Что в работе · 21 октября")
         self.assertIn("**🛠 В работе · 2**", data["text"])
-        self.assertIn("- **ролик**: 24 ч, Win", data["text"])
-        self.assertIn("Рекап от analyst не пришёл", data["text"])
+        self.assertIn("- **ролик**: 1 дн., Win", data["text"])
+        self.assertTrue(data["text"].endswith("*Нет данных: встречи, календарь, Teams, Jira*"))
+        self.assertNotIn("analyst", data["text"])
         self.assertTrue(data["asked"])   # telegram.brief глушит owner.notify без asked/urgent
 
     def test_no_one_to_review_goes_straight_out(self):
         self.state["sessions"] = {}
         self.tick(self.NOW)
         self.assertEqual([a[0] for a in self.sent], ["owner.notify"])
-        self.assertIn("Nobody to write it", self.sent[0][2]["text"])
+        self.assertNotIn("analyst", self.sent[0][2]["text"])
 
     def test_old_answer_is_not_todays(self):
         """recap.json вчерашнего дня лежит в папке другого дня — но и тот же день: файл старше отправки не принимаем."""

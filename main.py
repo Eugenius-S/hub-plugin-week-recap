@@ -63,8 +63,6 @@ STR = {
         "not_came": "the recap from {to} did not arrive",
         "nobody": "nobody to write the recap (no analyst and no hub session)",
         "day_title": "In progress · {date}",
-        "day_not_came": "No recap from {to} - meetings, Teams, Jira and the merge of the tasks are not in.",
-        "day_nobody": "Nobody to write it - meetings, Teams and Jira are not in.",
     },
     "ru": {
         "title": "Неделя {week}",
@@ -74,8 +72,6 @@ STR = {
         "not_came": "рекап от {to} не пришёл",
         "nobody": "разбирать некому (нет analyst и хаба)",
         "day_title": "Что в работе · {date}",
-        "day_not_came": "Рекап от {to} не пришёл — встречи, Teams, Jira и сведение дел не вошли.",
-        "day_nobody": "Разбирать некому — встречи, Teams и Jira не вошли.",
     },
 }
 
@@ -286,9 +282,7 @@ def finish_days(now, mine, send=put):
         if fresh:
             notify_day(label, day, str(data["text"]), now, send)
         elif now - day["sent"] >= DAY_WAIT:
-            lang = day.get("lang") or _lang()
-            why = tr(lang, "day_not_came", to=day["to"]) if day.get("to") else tr(lang, "day_nobody")
-            notify_day(label, day, day["text"] + "\n" + why, now, send)
+            notify_day(label, day, day["text"], now, send)
         else:
             continue
         changed = True
