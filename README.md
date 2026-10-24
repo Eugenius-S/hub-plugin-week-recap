@@ -24,6 +24,10 @@ Russian for a Russian hub.
 
 The plugin keeps its files in the hub state folder: `week-recap/<week>/digest.md` (the digest), `work.md` (the week's
 work by project, with tokens by computer), `draft.json` (the analyst's draft), `recap.json` (the writer's text), `report.html` (the report).
+Quiet weekend: with `quiet_weekend: true` in hub.json neither recap goes out from Friday 20:00 to Monday 8:30 (the hub's
+timezone). A daily recap that falls into the window is skipped for good (not sent on Monday); a weekly one due in the
+window waits for Monday 8:30.
+
 Build the digest by hand, sending nothing: `python3 main.py --week 2026-W41 --dry` (with `PYTHONPATH` pointing at the hub code).
 
 Install: "Settings" -> "Plugins" -> week-recap. The first review is of last week, right after installing.

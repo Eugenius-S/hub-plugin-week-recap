@@ -19,6 +19,7 @@ HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, HERE)
 # always our own folder: in a hub session HUB_STATE_DIR is the live hub, the test would overwrite its digest (12.10, digest W41)
 os.environ["HUB_STATE_DIR"] = tempfile.mkdtemp(prefix="wr-state-")
+os.environ["HUB_CONFIG"] = os.path.join(tempfile.mkdtemp(prefix="wr-config-"), "hub.json")   # never the live hub.json
 
 import main   # noqa: E402
 import recap  # noqa: E402
@@ -682,6 +683,123 @@ class DayFlow(unittest.TestCase):
         main.OTHERS = tempfile.mkdtemp()
         self.tick(self.NOW)
         self.assertEqual(self.sent, [])
+
+
+class QuietWeekend(unittest.TestCase):
+    """hub.json quiet_weekend: no recaps from Friday 20:00 to Monday 8:30 (the zone is hub.json timezone)."""
+    def setUp(self):
+        self.cfg = {"timezone": "Europe/Berlin"}   # the hub's zone: the window is counted in it
+        self.save()
+        self.addCleanup(lambda: os.path.exists(os.environ["HUB_CONFIG"]) and os.remove(os.environ["HUB_CONFIG"]))
+        self.home = tempfile.mkdtemp()
+        self.sent = []
+        self.mine = {"weeks": {"2026-W42": {"notified": 1}, "2026-W43": {"notified": 1}}}   # the weeks are done: days only
+        self.state = {"sessions": {"analyst": {"state": "idle", "role": "agent"}},
+                      "feeds": {"week-recap": [{"by": "owner", "text": "day: 09:00 Europe/Berlin"}]}}
+        self.orig = recap.open_now
+        recap.open_now = lambda st, now, droot: snap("Mac", now, [task("d9", "gen", "working", now - 7200, "x")])
+        main.OTHERS = tempfile.mkdtemp()
+        for p in (say("en"), mock.patch.object(main, "STATE_DIR", self.home)):
+            p.start()
+            self.addCleanup(p.stop)
+
+    def tearDown(self):
+        recap.open_now = self.orig
+
+    def save(self, **cfg):
+        self.cfg.update(cfg)
+        with open(os.environ["HUB_CONFIG"], "w", encoding="utf-8") as f:
+            json.dump(self.cfg, f)
+
+    def tick(self, now, feed=None):
+        if feed:
+            self.state["feeds"]["week-recap"].append(feed)
+        return main.tick(now, self.mine, self.state, lambda *a: self.sent.append(a), self.home, self.home)
+
+    def test_the_window_is_friday_2000_to_monday_0830(self):
+        quiet = lambda *t: main._own_weekend_quiet(at(*t), ZONE)   # noqa: E731
+        self.assertFalse(quiet(2026, 10, 23, 19, 59))
+        self.assertTrue(quiet(2026, 10, 23, 20, 0))
+        self.assertTrue(quiet(2026, 10, 24, 9, 0))
+        self.assertTrue(quiet(2026, 10, 25, 23, 59))
+        self.assertTrue(quiet(2026, 10, 26, 8, 29))
+        self.assertFalse(quiet(2026, 10, 26, 8, 30))
+        self.assertFalse(quiet(2026, 10, 22, 23, 0))
+
+    def test_the_flag_must_be_exactly_true(self):
+        sat = at(2026, 10, 24, 12)
+        self.assertFalse(main.quiet_now(sat, ZONE))            # not in hub.json
+        self.save(quiet_weekend="yes")
+        self.assertFalse(main.quiet_now(sat, ZONE))
+        self.save(quiet_weekend=True, timezone="Europe/Berlin")
+        self.assertTrue(main.quiet_now(sat, ZONE))
+        self.assertFalse(main.quiet_now(at(2026, 10, 21, 12), ZONE))
+
+    def test_unreadable_hub_json_is_not_quiet(self):
+        with open(os.environ["HUB_CONFIG"], "w") as f:
+            f.write("{")
+        self.assertFalse(main.quiet_now(at(2026, 10, 24, 12), ZONE))
+
+    def test_the_core_window_wins_when_it_has_one(self):
+        self.save(quiet_weekend=True, timezone="Europe/Berlin")
+        core = mock.MagicMock(weekend_quiet=mock.Mock(return_value=True))
+        with mock.patch.dict(sys.modules, {"core.owner": core}):
+            self.assertTrue(main.quiet_now(at(2026, 10, 21, 12), ZONE))   # Wednesday, but the core says quiet
+        core.weekend_quiet.assert_called_once()
+
+    def test_saturday_day_is_skipped_for_good(self):
+        self.save(quiet_weekend=True, timezone="Europe/Berlin")
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err):
+            self.assertTrue(self.tick(at(2026, 10, 24, 9, 5)))
+        self.assertEqual(self.sent, [])
+        self.assertIn("week-recap: quiet weekend, skipping the day 2026-10-24", err.getvalue())
+        self.assertIn("skipped", self.mine["days"]["2026-10-24"])
+        self.tick(at(2026, 10, 24, 15))   # not again
+        self.tick(at(2026, 10, 26, 9, 5))   # Monday - its own recap, Saturday is not caught up
+        self.assertEqual(sorted(self.mine["days"]), ["2026-10-24", "2026-10-26"])
+        self.assertEqual([a[0] for a in self.sent], ["message.received"])
+        self.assertIn("2026-10-26", self.sent[0][2]["text"])
+
+    def test_russian_log_line(self):
+        self.save(quiet_weekend=True, timezone="Europe/Berlin")
+        err = io.StringIO()
+        with say("ru"), contextlib.redirect_stderr(err):
+            self.tick(at(2026, 10, 25, 9, 5))
+        self.assertIn("week-recap: тихие выходные, пропускаю день 2026-10-25", err.getvalue())
+
+    def test_friday_only_after_2000(self):
+        self.save(quiet_weekend=True, timezone="Europe/Berlin")
+        self.tick(at(2026, 10, 23, 19, 0), {"by": "owner", "text": "day: 09:00 Europe/Berlin"})
+        self.assertEqual([a[0] for a in self.sent], ["message.received"])   # Friday morning recap goes
+        self.sent.clear()
+        self.mine["days"].clear()
+        self.tick(at(2026, 10, 23, 20, 30))   # hub was down all day, up after 20:00
+        self.assertEqual(self.sent, [])
+        self.assertIn("skipped", self.mine["days"]["2026-10-23"])
+
+    def test_off_flag_sends_on_saturday(self):
+        self.tick(at(2026, 10, 24, 9, 5))
+        self.assertEqual([a[0] for a in self.sent], ["message.received"])
+
+    def test_week_due_in_the_window_waits_for_monday_0830(self):
+        self.save(quiet_weekend=True, timezone="Europe/Berlin")
+        self.mine["weeks"].clear()
+        self.state["feeds"]["week-recap"] += [{"by": "owner", "text": "schedule: mon 08:00 Europe/Berlin"},
+                                              {"by": "owner", "text": "day: off"}]
+        self.tick(at(2026, 10, 26, 8, 5))
+        self.tick(at(2026, 10, 26, 8, 29))
+        self.assertEqual(self.mine["weeks"], {})
+        self.tick(at(2026, 10, 26, 8, 30))
+        self.assertIn("2026-W43", self.mine["weeks"])
+
+    def test_default_monday_nine_is_not_touched(self):
+        self.save(quiet_weekend=True, timezone="Europe/Berlin")
+        self.mine["weeks"].clear()
+        self.state["feeds"]["week-recap"] += [{"by": "owner", "text": "schedule: mon 09:00 Europe/Berlin"},
+                                              {"by": "owner", "text": "day: off"}]
+        self.tick(at(2026, 10, 26, 9, 0))
+        self.assertIn("2026-W43", self.mine["weeks"])
 
 
 class StartMode(unittest.TestCase):

@@ -63,6 +63,7 @@ STR = {
         "not_came": "the recap from {to} did not arrive",
         "nobody": "nobody to write the recap (no analyst and no hub session)",
         "day_title": "In progress · {date}",
+        "quiet_day": "{name}: quiet weekend, skipping the day {label}",
     },
     "ru": {
         "title": "Неделя {week}",
@@ -72,6 +73,7 @@ STR = {
         "not_came": "рекап от {to} не пришёл",
         "nobody": "разбирать некому (нет analyst и хаба)",
         "day_title": "Что в работе · {date}",
+        "quiet_day": "{name}: тихие выходные, пропускаю день {label}",
     },
 }
 
@@ -113,6 +115,31 @@ def _lang():
     print(f"{NAME}: the hub language is not named (hub.json and state.json unreadable or empty), using {fallback}",
           file=sys.stderr, flush=True)
     return fallback
+
+
+def _own_weekend_quiet(ts, zone):
+    """The quiet weekend window by itself (the core has no weekend_quiet yet): Friday 20:00 .. Monday 8:30 in the zone."""
+    t = datetime.datetime.fromtimestamp(ts, zone)
+    wd, hm = t.weekday(), (t.hour, t.minute)
+    return (wd == 4 and hm >= (20, 0)) or wd in (5, 6) or (wd == 0 and hm < (8, 30))
+
+
+def quiet_now(now, zone):
+    """True - the owner switched quiet_weekend on in hub.json and now is inside the window: neither the daily nor the weekly
+    recap goes out. The window is the core's (core.owner.weekend_quiet) when it has one, else the plugin's own copy."""
+    try:
+        cfg = catalog.load_config(STATE_DIR)
+    except (OSError, ValueError):
+        return False
+    if cfg.get("quiet_weekend") is not True:
+        return False
+    name = cfg.get("timezone")
+    zone = recap.tz(name) if name else zone
+    try:
+        from core.owner import weekend_quiet
+    except ImportError:
+        return _own_weekend_quiet(now, zone)
+    return bool(weekend_quiet(now, getattr(zone, "key", None) or name))
 
 
 def tr(lang, key, **params):
@@ -271,7 +298,7 @@ def finish_days(now, mine, send=put):
     """The recap came - to the owner; did not come in DAY_WAIT - the plugin's text. True - something changed."""
     changed = False
     for label, day in (mine.get("days") or {}).items():
-        if day.get("notified"):
+        if day.get("notified") or day.get("skipped"):
             continue
         try:
             with open(day["final"], encoding="utf-8") as f:
@@ -419,6 +446,8 @@ def tick(now, mine, state, send=put, state_dir=STATE_DIR, home=HOME):
     mine["schedule"] = when
     zone = recap.tz(when["zone"])
     label = recap.due(now, zone, mine["weeks"], when, STARTED)
+    if label and quiet_now(now, zone):
+        label = None   # quiet weekend: the due week waits for Monday 8:30 (the first tick after the window)
     if label:
         start(label, zone, now, mine, state, send, state_dir, home)
         changed = True
@@ -426,7 +455,11 @@ def tick(now, mine, state, send=put, state_dir=STATE_DIR, home=HOME):
     day = recap.day_schedule(state)
     dzone = recap.tz(day["zone"] or when["zone"])
     label = recap.day_due(now, dzone, mine.setdefault("days", {}), day)
-    if label and start_day(label, dzone, now, mine, state, send, state_dir, home):
+    if label and quiet_now(now, dzone):
+        mine["days"][label] = {"skipped": now}   # not caught up on Monday: the recap is about "now"
+        print(tr(_lang(), "quiet_day", name=NAME, label=label), file=sys.stderr, flush=True)
+        changed = True
+    elif label and start_day(label, dzone, now, mine, state, send, state_dir, home):
         changed = True
     return finish_days(now, mine, send) or changed
 
