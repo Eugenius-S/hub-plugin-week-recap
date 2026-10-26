@@ -990,7 +990,7 @@ class Language(unittest.TestCase):
         for key in ("description", "why"):
             self.assertNotRegex(man[key], CYRILLIC, key)
             self.assertRegex(man["i18n"]["ru"][key], CYRILLIC, key)
-        self.assertEqual(man["version"], "2.4.2")
+        self.assertEqual(man["version"], "2.5.0")
 
 
 def node(prog):

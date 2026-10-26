@@ -31,6 +31,7 @@ import time
 from core import catalog, journal, spool
 
 import recap
+import richpost
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 STATE_DIR = os.environ.get("HUB_STATE_DIR") or open(os.path.join(catalog.config_dir(), "state-dir")).read().strip()
@@ -372,13 +373,52 @@ def publish(label, w, data, now, send=put):
     os.makedirs(REPORTS, exist_ok=True)
     shutil.copyfile(w["report"], os.path.join(REPORTS, f"{label}.html"))
     lang = _lang()
-    heads = [f"• {str(x.get('title') or '').strip()}" for x in (data.get("insights") or [])[:3]
-             if isinstance(x, dict) and str(x.get("title") or "").strip()]
-    send("owner.notify", None, {"title": tr(lang, "title", week=data["week"]),
-                                "text": "\n\n".join([str(data.get("tldr") or "").strip(), *(["\n".join(heads)] if heads else []),
-                                                     tr(lang, "full", path=w["report"])]),
-                                "source": NAME, "channel": "cli", "owner": True, "asked": True})
+    title = tr(lang, "title", week=data["week"])
+    if not (rich_on() and send_rich(label, w, data, lang, title, send)):
+        heads = [f"• {str(x.get('title') or '').strip()}" for x in (data.get("insights") or [])[:3]
+                 if isinstance(x, dict) and str(x.get("title") or "").strip()]
+        send("owner.notify", None, {"title": title,
+                                    "text": "\n\n".join([str(data.get("tldr") or "").strip(), *(["\n".join(heads)] if heads else []),
+                                                         tr(lang, "full", path=w["report"])]),
+                                    "source": NAME, "channel": "cli", "owner": True, "asked": True})
     w.update(notified=now, text=str(data.get("tldr") or ""), data=data)
+
+
+def rich_on():
+    """hub.json telegram.rich is on (the core's own switch for send-rich; a core without it never reads it): the weekly
+    recap goes as one rich message. Off or hub.json unreadable - the short text, as before."""
+    try:
+        return ((catalog.load_config(STATE_DIR) or {}).get("telegram") or {}).get("rich") is True
+    except Exception:   # noqa: BLE001 - settings unreadable - the old way
+        return False
+
+
+def keep_copy(path):
+    """A copy in the hub's attachments (as `hub send-file` does): the file stays in the feed and in Telegram. No attach
+    module (an older core) or no copy - the file itself."""
+    try:
+        from modules.web import attach
+        try:
+            limit = attach.max_bytes(catalog.load_config(STATE_DIR))
+        except ValueError:
+            limit = attach.max_bytes({})
+        return attach.keep(STATE_DIR, path, limit) or path
+    except Exception:   # noqa: BLE001
+        return path
+
+
+def send_rich(label, w, data, lang, title, send):
+    """The recap as the rich markdown with two pictures (richpost.py) - one owner.file {rich} to the owner, the bot sends it
+    as one message (more than it holds - the text and the album). False - could not build: the caller sends the short text."""
+    try:
+        path, _ = richpost.build(data, lang, os.path.join(HOME, label), title)
+    except Exception as e:   # noqa: BLE001 - a broken picture or text must not swallow the recap
+        print(f"{NAME}: the rich recap {label} was not built ({e}) - sending the short text", file=sys.stderr, flush=True)
+        return False
+    kept = keep_copy(path)
+    send("owner.file", None, {"path": kept, "caption": title, "title": title, "rich": True,
+                              **({"source": path} if kept != path else {})})
+    return True
 
 
 def numbers_text(n, lang="en"):

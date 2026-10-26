@@ -18,12 +18,19 @@ written by the `analyst` agent if there is one, otherwise by the hub. The finish
 Week tab; if the review does not come within 6 hours, the numbers alone arrive. Jira goes through the hub's `atlassian`
 MCP, if it is connected and granted to whoever writes the review.
 
+Rich Telegram message: with `telegram.rich: true` in hub.json (the hub's own switch for rich messages) the weekly recap goes
+to Telegram as one rich message instead of the short text: the gist, the week's four numbers as a picture, the share of
+tokens by theme as a chart (with the table folded under it), what hurt and what to try, what was done by theme (folded),
+how you worked together, and the tasks for the week. The pictures are drawn by the plugin itself (Pillow; without it or
+without a font with the needed letters the numbers become a list and the shares a table). A recap too long for one
+message is shortened step by step. The report page stays in the Week tab. Without the switch - the short text as before.
+
 Language: the prompts to the analyst and the writer are English and ask for the report in the hub language (Russian hub -
 Russian report, any other - English). The report page labels, the notifications and the tab are English by default and
 Russian for a Russian hub.
 
 The plugin keeps its files in the hub state folder: `week-recap/<week>/digest.md` (the digest), `work.md` (the week's
-work by project, with tokens by computer), `draft.json` (the analyst's draft), `recap.json` (the writer's text), `report.html` (the report).
+work by project, with tokens by computer), `draft.json` (the analyst's draft), `recap.json` (the writer's text), `report.html` (the report), and for the rich message `recap.md`, `numbers.png`, `chart-tokens.png`.
 Quiet weekend: with `quiet_weekend: true` in hub.json neither recap goes out from Friday 20:00 to Monday 8:30 (the hub's
 timezone). A daily recap that falls into the window is skipped for good (not sent on Monday); a weekly one due in the
 window waits for Monday 8:30.
