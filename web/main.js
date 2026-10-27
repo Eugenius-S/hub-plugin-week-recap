@@ -15,6 +15,13 @@ const STR = {
     ready: "ready", numbers: "numbers only", writing: "the writer is writing the texts", reviewing: "{to} is reviewing",
     keyword: "schedule", start: "start", days: ["mon", "tue", "wed", "thu", "fri", "sat", "sun"],
     day_names: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"], locale: "en-US",
+    blocks_title: "What the recaps show", blocks_hint: "Untick what you do not want to see: it leaves the text, the report and the Telegram message.",
+    blocks_week: "Weekly recap", blocks_day: "Daily recap", blocks_saved: "saved - applies to the next recap",
+    block: {
+      insights: "Insights", numbers: "Numbers", themes: "What was done", tokens: "Tokens", together: "How we worked together",
+      todo: "Todo", machines: "By computers", decided: "Decided", wait: "Waiting for you", work: "In progress",
+      stuck: "Stuck", backlog: "Backlog", jira: "Jira",
+    },
   },
   ru: {
     title: "Неделя", subtitle: "рекап недели и задачи",
@@ -26,6 +33,13 @@ const STR = {
     ready: "готов", numbers: "только цифры", writing: "тексты пишет writer", reviewing: "разбирает {to}",
     keyword: "расписание", start: "старт", days: ["пн", "вт", "ср", "чт", "пт", "сб", "вс"],
     day_names: ["пн", "вт", "ср", "чт", "пт", "сб", "вс"], locale: "ru-RU",
+    blocks_title: "Что показывают рекапы", blocks_hint: "Сними галочку с того, что не нужно: блок уйдёт из текста, отчёта и сообщения в Telegram.",
+    blocks_week: "Недельный рекап", blocks_day: "Дневной рекап", blocks_saved: "сохранено — применится к следующему рекапу",
+    block: {
+      insights: "Инсайты", numbers: "Цифры", themes: "Что сделано", tokens: "Токены", together: "Как работали вместе",
+      todo: "Задачи на неделю", machines: "По компьютерам", decided: "Решено", wait: "Ждёт тебя", work: "В работе",
+      stuck: "Застряло", backlog: "Очередь", jira: "Jira",
+    },
   },
 };
 // hub is set in register(); hub.lang is read on every call, never at module load
@@ -132,12 +146,56 @@ function when() {
   return row;
 }
 
+// which blocks of the recaps are shown: the tab posts "blocks <week|day>: <the switched-off ones, comma separated>" (or "-")
+// to the plugin channel - the process writes it into hub.json (a page cannot) within a minute. Until data.json shows the
+// same, the choice stays here, so the ticks do not jump back.
+const BLOCKS = {
+  week: ["insights", "numbers", "themes", "tokens", "together", "todo", "machines"],
+  day: ["decided", "wait", "work", "stuck", "backlog", "jira"],
+};
+const pending = {};
+let blocksSaved = "";
+
+const hiddenOf = (kind) => pending[kind] ?? data?.blocks?.[kind]?.hide ?? [];
+
+function blocksBox() {
+  const wrap = hub.el("section", "wr-blocks");
+  wrap.append(hub.el("h3", "wr-sub", t("blocks_title")), hub.el("p", "wr-muted", t("blocks_hint")));
+  for (const kind of ["week", "day"]) {
+    const hide = hiddenOf(kind);
+    const group = hub.el("div", "wr-group");
+    group.append(hub.el("span", "wr-label", t("blocks_" + kind)));
+    for (const name of BLOCKS[kind]) {
+      const row = hub.el("label", "wr-check");
+      const box = hub.el("input");
+      box.type = "checkbox";
+      box.checked = !hide.includes(name);
+      box.onchange = async () => {
+        const now = BLOCKS[kind].filter((b) => (b === name ? !box.checked : hiddenOf(kind).includes(b)));
+        pending[kind] = now;
+        blocksSaved = t("blocks_saved");
+        await hub.postFeed(`blocks ${kind}: ${now.length ? now.join(", ") : "-"}`);
+        paint();
+      };
+      row.append(box, " " + (STR[lang()].block[name] ?? STR.en.block[name]));
+      group.append(row);
+    }
+    wrap.append(group);
+  }
+  if (blocksSaved) wrap.append(hub.el("p", "wr-muted", blocksSaved));
+  return wrap;
+}
+
 function paint() {
   if (!box) return;
+  for (const kind in pending) {
+    const now = data?.blocks?.[kind]?.hide;
+    if (now && now.join() === pending[kind].join()) delete pending[kind];
+  }
   const weeks = data?.weeks || [];
   if (open === null && weeks[0]) open = weeks[0].label;
   box.replaceChildren(
-    hub.el("h2", "wr-title", t("title")), when(),
+    hub.el("h2", "wr-title", t("title")), when(), blocksBox(),
     weeks.length ? hub.el("div", "wr-list") : hub.el("p", "wr-muted", t("empty")));
   if (weeks.length) box.lastChild.append(...weeks.map(week));
 }

@@ -363,7 +363,6 @@
     add(box, dt, el("dd", null, text(n.value)));
     $("numbers").append(box);
   });
-  show("s-numbers", nums.length);
 
   // insights
   const kinds = { unknown: "k_unknown", improve: "k_improve", broken: "k_broken" };
@@ -385,6 +384,7 @@
     $("machines").append(li);
   });
   show("machines", $("machines").childNodes.length);
+  show("s-numbers", nums.length || $("machines").childNodes.length);
 
   // themes
   const states = { done: "st_done", progress: "st_progress", dropped: "st_dropped" };
@@ -398,7 +398,7 @@
     bar.append(fill);
     bar.setAttribute("role", "img");
     bar.setAttribute("aria-label", t("bar_aria", { pct }));
-    add(head, line, bar);
+    add(head, line, share && bar);   // tokens switched off - no shares, no bar
     const ul = el("ul", "items");
     list(th.items).filter((x) => text(x.title)).forEach((x) => {
       const st = states[x.state] ? x.state : "done";

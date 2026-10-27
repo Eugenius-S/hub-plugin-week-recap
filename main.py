@@ -217,7 +217,7 @@ def platforms():
     return out
 
 
-def collect(label, zone, state_dir=STATE_DIR, home=HOME, state=None, until=None, others=None):
+def collect(label, zone, state_dir=STATE_DIR, home=HOME, state=None, until=None, others=None, hide=()):
     """The week's digests into files: (the week's record, path to the digest). until - the last day (2026-10-09),
     otherwise the whole week; others - exports of other hubs (hub-sync/work), their work goes into the same digest."""
     start, end, label = recap.week_of(label, zone, until)
@@ -240,9 +240,9 @@ def collect(label, zone, state_dir=STATE_DIR, home=HOME, state=None, until=None,
     work_path = os.path.join(folder, "work.md")
     with open(work_path, "w", encoding="utf-8") as f:
         f.write(recap.work_digest(label, start, end, work, zone, names=names, note=recap.hubs_note(
-            machines(), theirs, me)))
+            machines(), theirs, me), hide=hide))
     return {"start": start, "end": end, "numbers": m["numbers"], "digest": path, "work": work_path,
-            "machines": recap.machine_report(work, names, me, got, machines()),
+            "machines": recap.machine_report(work, names, me, got, machines(), "tokens" not in hide),
             "draft": os.path.join(folder, "draft.json"), "final": os.path.join(folder, "recap.json"),
             "report": os.path.join(folder, "report.html"), "recap": os.path.join(folder, "recap.json")}, path
 
@@ -255,9 +255,46 @@ def jira_config():
     return {k: j[k] for k in ("url", "projects") if j.get(k)} if isinstance(j, dict) else None
 
 
+def hide_of(kind):
+    """The blocks the owner switched off in the recap of this kind ("week" or "day") - hub.json extensions.<this plugin>:
+    week_hide / day_hide, lists of names; nothing set or hub.json unreadable - [] (everything is shown)."""
+    try:
+        entry = ((catalog.load_config(STATE_DIR) or {}).get("extensions") or {}).get(NAME)
+    except Exception:   # noqa: BLE001 - no settings: everything is shown
+        return []
+    return recap.hidden(kind, (entry or {}).get(recap.OPTIONS[kind]) if isinstance(entry, dict) else None)
+
+
+def apply_blocks(mine, state):
+    """The choice from the Week tab (the post "blocks week: tokens, todo" in the plugin channel - the page cannot write
+    hub.json) goes into hub.json extensions.<this plugin>, once per post: what the owner then edits there by hand stays.
+    True - the plugin's own state changed."""
+    done, changed = mine.setdefault("blocks_post", {}), False
+    for kind, hidden in recap.blocks_posts(state).items():
+        mark = ",".join(hidden)
+        if done.get(kind) == mark:
+            continue
+        try:
+            with catalog.edit_settings(catalog.config_path(STATE_DIR)) as raw:
+                entry = (raw.get("extensions") or {}).get(NAME)
+                if not isinstance(entry, dict):   # not set up as an extension of this hub: nothing to write into (said once)
+                    print(f"{NAME}: no extensions.{NAME} in hub.json - the choice of blocks is not saved", file=sys.stderr, flush=True)
+                elif hidden:
+                    entry[recap.OPTIONS[kind]] = hidden
+                else:
+                    entry.pop(recap.OPTIONS[kind], None)
+        except Exception as e:   # noqa: BLE001 - hub.json busy or unreadable: the next tick tries again
+            print(f"{NAME}: the choice of blocks was not saved ({e})", file=sys.stderr, flush=True)
+            continue
+        done[kind] = mark
+        changed = True
+    return changed
+
+
 def day_material(label, zone, now, state, state_dir=STATE_DIR, home=HOME, others=None):
     """The day's digest into a file: (the day's record, this hub's snapshot, the others' snapshots). No open_snapshot in the core - None."""
     lang = recap.norm(_lang())
+    hide = hide_of("day")
     mine = recap.open_now(state, now, os.path.join(state_dir, "directions"))
     theirs = recap.other_open(others or OTHERS, socket.gethostname())
     if mine is None and not theirs:
@@ -266,9 +303,10 @@ def day_material(label, zone, now, state, state_dir=STATE_DIR, home=HOME, others
     os.makedirs(folder, exist_ok=True)
     path = os.path.join(folder, "open.md")
     with open(path, "w", encoding="utf-8") as f:
-        f.write(recap.day_digest(label, mine, theirs, now, zone, machines(), jira_config()))
+        f.write(recap.day_digest(label, mine, theirs, now, zone, machines(), jira_config(), hide))
     return {"digest": path, "final": os.path.join(folder, "recap.json"),
-            "lang": lang, "text": recap.day_text(label, mine, theirs, now, zone, machines(), lang)}, mine, theirs
+            "lang": lang, "hide": hide,
+            "text": recap.day_text(label, mine, theirs, now, zone, machines(), lang, hide)}, mine, theirs
 
 
 def start_day(label, zone, now, mine, state, send=put, state_dir=STATE_DIR, home=HOME, others=None):
@@ -280,7 +318,7 @@ def start_day(label, zone, now, mine, state, send=put, state_dir=STATE_DIR, home
     to = recap.reviewer(state)
     day.update(to=to, sent=now)
     if to:
-        send("message.received", None, {"to": to, "text": recap.day_prompt(label, day["digest"], day["final"], jira_config(), day["lang"]),
+        send("message.received", None, {"to": to, "text": recap.day_prompt(label, day["digest"], day["final"], jira_config(), day["lang"], day["hide"]),
                                         "channel": "session", "owner": False, "sender": NAME})
     else:
         day["sent"] = now - DAY_WAIT   # nobody to write it - at once what there is
@@ -332,13 +370,14 @@ def period(w, zone, lang="en"):
 
 
 def start(label, zone, now, mine, state, send=put, state_dir=STATE_DIR, home=HOME, until=None):
-    week, _ = collect(label, zone, state_dir, home, state, until)
+    hide = hide_of("week")   # what the owner switched off by the start of the week: the whole chain follows it
+    week, _ = collect(label, zone, state_dir, home, state, until, hide=hide)
     to = recap.reviewer(state)
     lang = recap.norm(_lang())   # the language of this week's report: the prompts ask for it, the template labels follow it
-    week.update(to=to, sent=now, lang=lang, period=period(week, zone, lang))
+    week.update(to=to, sent=now, lang=lang, period=period(week, zone, lang), hide=hide)
     if to:
         send("message.received", None, {"to": to, "text": recap.prompt(label, week["period"], week["digest"], week["work"],
-                                                                         week["draft"], SAMPLE, lang),
+                                                                         week["draft"], SAMPLE, lang, hide),
                                         "channel": "session", "owner": False, "sender": NAME})
     else:
         week["sent"] = now - WAIT   # nobody to review - the numbers at once
@@ -364,8 +403,8 @@ def writer(state):
 
 def publish(label, w, data, now, send=put):
     """The report in the designer's HTML (labels in the week's language), a copy for the link from the page, the owner gets the TL;DR and the path."""
-    data = {"week": w.get("period") or label, **data, "machines": w.get("machines") or [],
-            "lang": recap.norm(w.get("lang") or _lang())}
+    data = recap.scrub({"week": w.get("period") or label, **data, "machines": w.get("machines") or [],
+                        "lang": recap.norm(w.get("lang") or _lang())}, w.get("hide") or ())
     with open(TEMPLATE, encoding="utf-8") as f:
         html = recap.render(f.read(), data)
     with open(w["report"], "w", encoding="utf-8") as f:
@@ -445,7 +484,8 @@ def finish(now, mine, state=None, send=put):
             if to:
                 w["writing"] = now
                 send("message.received", None, {"to": to, "text": recap.writer_prompt(label, w["draft"], w["final"],
-                                                                                  w.get("lang") or _lang()),
+                                                                                  w.get("lang") or _lang(),
+                                                                                  w.get("hide") or ()),
                                                 "channel": "session", "owner": False, "sender": NAME})
             else:
                 publish(label, w, draft, now, send)
@@ -476,13 +516,15 @@ def view(mine):
                        "tiles": (w.get("data") or {}).get("numbers") or [], "stage": stage(w),
                        "report": f"web/reports/{k}.html" if w.get("data") else None,
                        "recap": w.get("report") or w["recap"], "digest": w["digest"]} for k, w in weeks],
-            "when": mine.get("schedule") or recap.DEFAULT}
+            "when": mine.get("schedule") or recap.DEFAULT,
+            "blocks": {k: {"all": list(recap.BLOCKS[k]), "hide": hide_of(k)} for k in recap.BLOCKS}}
 
 
 def tick(now, mine, state, send=put, state_dir=STATE_DIR, home=HOME):
     """One tick: True - its own state changed (write it and refresh the view)."""
+    changed = apply_blocks(mine, state)
     when = recap.schedule(state)
-    changed = mine.get("schedule") != when
+    changed = changed or mine.get("schedule") != when
     mine["schedule"] = when
     zone = recap.tz(when["zone"])
     label = recap.due(now, zone, mine["weeks"], when, STARTED)
@@ -532,7 +574,7 @@ def main():
         zone = recap.tz((mine.get("schedule") or recap.DEFAULT)["zone"])
         until = sys.argv[sys.argv.index("--to") + 1] if "--to" in sys.argv else None
         if "--dry" in sys.argv:
-            week, path = collect(label, zone, state=journal.load_state(STATE_DIR), until=until)
+            week, path = collect(label, zone, state=journal.load_state(STATE_DIR), until=until, hide=hide_of("week"))
             print(numbers_text(week["numbers"]) + f"\n\nDigest: {path}\nWork: {week['work']}")
             return
         start(label, zone, time.time(), mine, journal.load_state(STATE_DIR), until=until)
@@ -540,13 +582,17 @@ def main():
         write(OUT, view(mine))
         print(f"handed over for review: {mine['weeks'][label].get('to')}; digest: {mine['weeks'][label]['digest']}")
         return
-    write(OUT, view(mine))
+    shown = view(mine)
+    write(OUT, shown)
     while True:
         mine = read(mine_path, mine)   # a manual run (--week) writes the same file: do not send a week twice
         try:
             if tick(time.time(), mine, journal.load_state(STATE_DIR)):
                 write(mine_path, mine)
-                write(OUT, view(mine))
+            now_view = view(mine)   # also when the owner edited the blocks in hub.json by hand
+            if now_view != shown:
+                shown = now_view
+                write(OUT, shown)
         except Exception as e:   # noqa: BLE001 - a failed tick does not kill the process; the hub would restart it, but for nothing
             print(f"week-recap: {e!r}", file=sys.stderr, flush=True)
         time.sleep(EVERY)

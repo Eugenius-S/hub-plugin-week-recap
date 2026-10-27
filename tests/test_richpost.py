@@ -15,6 +15,7 @@ os.environ["HUB_CONFIG"] = os.path.join(tempfile.mkdtemp(prefix="wr-config-"), "
 
 import main      # noqa: E402
 import richpost  # noqa: E402
+import recap     # noqa: E402
 
 TITLE = "Week Oct 19–25"
 DATA = {
@@ -68,6 +69,37 @@ class Build(unittest.TestCase):
                      "For this week", "[Flags](https://example.com/DSN-1)", "Not filed anywhere"):
             self.assertIn(part, md)
         self.assertLess(md.index("2\u00a0040M"), md.index("1\u00a0360M"))   # by share, the biggest first
+
+    def test_tokens_switched_off_no_chart_no_counts_no_shares(self):
+        data = dict(DATA, tldr="The page took most of the week.")
+        md, pics = self.build(recap.scrub(data, ["tokens"]))
+        self.assertEqual(sorted(os.path.basename(p) for p in pics), ["numbers.png"])
+        self.assertNotIn("chart-tokens", md)
+        self.assertNotIn("Where the tokens went", md)
+        self.assertNotIn("oken", md)
+        self.assertNotIn("2\u00a0040M", md)
+        self.assertNotIn("300M", md)
+        self.assertNotIn("%", md)
+        self.assertIn("What was done by theme", md)          # the rest of the recap is in place
+        self.assertIn("The page", md)
+        on, on_pics = self.build(recap.scrub(data, ()))
+        self.assertIn("chart-tokens.png", on)
+        self.assertEqual(len(on_pics), 2)
+
+    def test_numbers_off_no_numbers_picture_and_the_rest_stays(self):
+        md, pics = self.build(recap.scrub(DATA, ["numbers"]))
+        self.assertEqual(sorted(os.path.basename(p) for p in pics), ["chart-tokens.png"])
+        self.assertNotIn("numbers.png", md)
+        self.assertIn("Where the tokens went", md)
+
+    def test_each_block_off_leaves_its_section_out(self):
+        for block, mark in (("insights", "What hurt and what to try"), ("themes", "What was done by theme"),
+                            ("together", "How we worked together"), ("todo", "For this week")):
+            md, _ = self.build(recap.scrub(DATA, [block]))
+            self.assertNotIn(mark, md, block)
+            for other in {"What hurt and what to try", "What was done by theme", "How we worked together",
+                          "For this week"} - {mark}:
+                self.assertIn(other, md, (block, other))
 
     def test_russian(self):
         md, _ = self.build(lang="ru")

@@ -813,6 +813,296 @@ class StartMode(unittest.TestCase):
         self.assertEqual(recap.schedule({"feeds": {"week-recap": feed}}), when)
 
 
+class Blocks(unittest.TestCase):
+    """The owner's choice of the blocks of the weekly and the daily recap: hub.json extensions.<plugin>.week_hide / day_hide;
+    a switched-off block is in no text, no report, no rich picture and no task for the reviewer."""
+    NOW = at(2026, 10, 21, 9, 5)
+    FLEET = {"analyst": {"role": "agent", "state": "idle"}, "writer": {"role": "agent", "state": "idle"}}
+
+    def setUp(self):
+        self.state = journal_dir([WEEK])
+        self.home = os.path.join(self.state, "week-recap")
+        self.sent, self.mine = [], {"weeks": {}}
+        self.send = lambda *a: self.sent.append(a)
+        self.config({})
+        self.addCleanup(lambda: os.path.exists(os.environ["HUB_CONFIG"]) and os.remove(os.environ["HUB_CONFIG"]))
+        for p in (say("en"), mock.patch.object(main, "STATE_DIR", self.state)):
+            p.start()
+            self.addCleanup(p.stop)
+
+    def config(self, options, extension=True):
+        cfg = {"timezone": "Europe/Berlin"}
+        if extension:
+            cfg["extensions"] = {main.NAME: dict(options)}
+        with open(os.environ["HUB_CONFIG"], "w", encoding="utf-8") as f:
+            json.dump(cfg, f)
+
+    def saved(self):
+        with open(os.environ["HUB_CONFIG"], encoding="utf-8") as f:
+            return json.load(f)
+
+    def post(self, text, by="owner"):
+        return {"by": by, "text": text}
+
+    def tick(self, now, feed=(BERLIN_9, DAY_OFF), sessions=None):
+        return main.tick(now, self.mine, {"sessions": sessions or self.FLEET, "feeds": {"week-recap": list(feed)}},
+                         self.send, self.state, self.home)
+
+    # -- the setting and the post from the tab
+
+    def test_the_lists_are_what_the_code_really_has(self):
+        self.assertEqual(recap.BLOCKS["week"], ("insights", "numbers", "themes", "tokens", "together", "todo", "machines"))
+        self.assertEqual(recap.BLOCKS["day"], ("decided", "wait", "work", "stuck", "backlog", "jira"))
+        self.assertNotIn("tokens", recap.BLOCKS["day"])   # the daily recap has no tokens at all
+
+    def test_hidden_knows_only_its_own_names_once_in_the_table_order(self):
+        self.assertEqual(recap.hidden("week", ["todo", "Tokens", "tokens", "nope", 5]), ["tokens", "todo"])
+        self.assertEqual(recap.hidden("day", ["tokens"]), [])          # not a block of the day
+        for bad in (None, "tokens", 3, {"tokens": 1}):
+            self.assertEqual(recap.hidden("week", bad), [])
+
+    def test_the_post_from_the_tab(self):
+        def got(*posts, **kw):
+            return recap.blocks_posts({"feeds": {"week-recap": list(posts)}, **kw})
+        self.assertEqual(got(self.post("blocks week: tokens, todo")), {"week": ["tokens", "todo"]})
+        self.assertEqual(got(self.post("blocks week: tokens"), self.post("blocks week: -")), {"week": []})   # the last one
+        self.assertEqual(got(self.post("blocks week: todo"), self.post("blocks day: wait jira")),
+                         {"week": ["todo"], "day": ["wait", "jira"]})
+        self.assertEqual(got(self.post("blocks week: tokens, nothing")), {})        # a name it does not know - not taken
+        self.assertEqual(got(self.post("blocks day: tokens")), {})                 # tokens are not a block of the day
+        self.assertEqual(got(self.post("blocks week: tokens", by="agent")), {})     # not the owner
+        self.assertEqual(got(self.post("blocks week: tokens", by="hub-core"),
+                             sessions={"hub-core": {"kind": "hub"}}), {"week": ["tokens"]})
+
+    def test_the_choice_is_written_to_hub_json_once_per_post(self):
+        self.config({"path": "x", "other": 1})
+        feed = [self.post("blocks week: tokens, todo"), self.post("blocks day: -")]
+        state = {"feeds": {"week-recap": feed}}
+        self.assertTrue(main.apply_blocks(self.mine, state))
+        entry = self.saved()["extensions"][main.NAME]
+        self.assertEqual(entry, {"path": "x", "other": 1, "week_hide": ["tokens", "todo"]})   # all on - no key
+        self.assertEqual(main.hide_of("week"), ["tokens", "todo"])
+        self.assertEqual(main.hide_of("day"), [])
+        self.assertFalse(main.apply_blocks(self.mine, state))                      # the same post - nothing again
+        self.config({"week_hide": ["insights"]})                                   # the owner edits hub.json by hand ...
+        self.assertFalse(main.apply_blocks(self.mine, state))
+        self.assertEqual(main.hide_of("week"), ["insights"])                       # ... and the old post does not undo it
+        feed.append(self.post("blocks week: -"))                                  # a new post does
+        self.assertTrue(main.apply_blocks(self.mine, state))
+        self.assertNotIn("week_hide", self.saved()["extensions"][main.NAME])
+
+    def test_no_extension_entry_nothing_is_written_and_it_is_said_once(self):
+        self.config({}, extension=False)
+        state = {"feeds": {"week-recap": [self.post("blocks week: tokens")]}}
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err):
+            self.assertTrue(main.apply_blocks(self.mine, state))
+            self.assertFalse(main.apply_blocks(self.mine, state))
+        self.assertEqual(self.saved(), {"timezone": "Europe/Berlin"})
+        self.assertEqual(err.getvalue().count("not saved"), 1)
+
+    def test_unreadable_hub_json_everything_is_shown(self):
+        with open(os.environ["HUB_CONFIG"], "w") as f:
+            f.write("{")
+        self.assertEqual((main.hide_of("week"), main.hide_of("day")), ([], []))
+
+    def test_the_view_tells_the_tab_the_state(self):
+        self.config({"week_hide": ["tokens"]})
+        v = main.view({"weeks": {}})
+        self.assertEqual(v["blocks"]["week"], {"all": list(recap.WEEK_BLOCKS), "hide": ["tokens"]})
+        self.assertEqual(v["blocks"]["day"], {"all": list(recap.DAY_BLOCKS), "hide": []})
+
+    # -- the weekly recap without tokens (and without the todo)
+
+    def run_week(self, options):
+        self.config(options)
+        self.tick(at(2026, 10, 12, 9))
+        week = self.mine["weeks"]["2026-W41"]
+        with open(week["work"], encoding="utf-8") as f:
+            work = f.read()
+        return week, work, self.sent[0][2]["text"]
+
+    def test_everything_on_the_tokens_are_there(self):
+        week, work, task_text = self.run_week({})
+        self.assertIn("Total tokens", work)
+        self.assertNotIn("owner switched", task_text)
+        self.assertEqual(week["hide"], [])
+
+    def test_no_tokens_in_the_material_the_task_the_writer_and_the_report(self):
+        week, work, task_text = self.run_week({"week_hide": ["tokens"]})
+        self.assertEqual(week["hide"], ["tokens"])
+        self.assertNotIn("oken", work)
+        self.assertNotIn("owner switched these blocks off", work)
+        self.assertIn("owner switched these blocks off", task_text)
+        self.assertIn("tokens (no counts and no shares anywhere)", task_text)
+        self.assertNotIn("tile with the tokens", task_text.lower())
+        self.assertEqual(week["machines"], [{"name": "Mac"}])                    # no tokens and no share per computer
+        draft = {"tldr": DRAFT_TLDR, "numbers": [{"label": "Tasks done", "value": "1"},
+                                                  {"label": "Tokens", "value": "3 400M"}],
+                 "done": [], "themes": [{"title": "Reports", "tokens": "100M", "share": 0.5,
+                                         "items": [{"title": "September", "state": "done", "tokens": "50M"}]}],
+                 "todo": {"filed": [], "not_filed": []}}
+        with open(week["draft"], "w", encoding="utf-8") as f:
+            json.dump(draft, f, ensure_ascii=False)
+        os.utime(week["draft"], (at(2026, 10, 12, 9, 30),) * 2)
+        self.tick(at(2026, 10, 12, 9, 31))
+        to_writer = self.sent[-1][2]
+        self.assertEqual(to_writer["to"], "writer")
+        self.assertIn("owner switched these blocks off", to_writer["text"])
+        with open(week["final"], "w", encoding="utf-8") as f:
+            json.dump(draft, f, ensure_ascii=False)                            # the writer did not remove them
+        os.utime(week["final"], (at(2026, 10, 12, 10),) * 2)
+        self.tick(at(2026, 10, 12, 10, 1))
+        with open(week["report"], encoding="utf-8") as f:
+            html = f.read()
+        blob = json.loads(re.search(r'<script id="recap-data" type="application/json">(.*?)</script>', html, re.S)[1])
+        self.assertEqual([n["label"] for n in blob["numbers"]], ["Tasks done"])
+        th, = blob["themes"]
+        self.assertEqual(sorted(th), ["items", "title"])                         # no tokens, no share
+        self.assertEqual(blob["machines"], [{"name": "Mac"}])
+        self.assertNotIn("3 400M", html)
+        self.assertNotIn("100M", html)
+
+    def test_the_tokens_are_in_no_other_option(self):
+        """The other weekly blocks stay: the tokens off leaves insights, numbers, themes, together, todo."""
+        data = {"tldr": "t", "numbers": [{"label": "Tokens", "value": "9"}, {"label": "Tasks", "value": "1"}],
+                "insights": [{"title": "i"}], "themes": [{"title": "T", "tokens": "1M", "share": 1, "items": []}],
+                "together": {"good": ["g"]}, "todo": {"filed": [{"title": "x"}]}, "machines": [{"name": "Mac", "tokens": "1M"}]}
+        out = recap.scrub(data, ["tokens"])
+        self.assertEqual(out["insights"], data["insights"])
+        self.assertEqual(out["together"], data["together"])
+        self.assertEqual(out["todo"], data["todo"])
+        self.assertEqual(out["numbers"], [{"label": "Tasks", "value": "1"}])
+        self.assertEqual(data["themes"][0]["tokens"], "1M")                     # the draft itself is not changed
+
+    def test_every_weekly_block_on_its_own(self):
+        data = {"tldr": "t", "numbers": [{"label": "Tasks", "value": "1"}], "insights": [{"title": "i"}],
+                "themes": [{"title": "T", "items": []}], "together": {"good": ["g"]}, "todo": {"filed": [{"title": "x"}]},
+                "machines": [{"name": "Mac", "tokens": "1M"}]}
+        empty = {"insights": [], "numbers": [], "themes": [], "together": {}, "todo": {}, "machines": []}
+        for block in recap.WEEK_BLOCKS:
+            out = recap.scrub(data, [block])
+            if block == "tokens":
+                continue
+            self.assertEqual(out[block], empty[block], block)
+            for other in empty:
+                if other != block:
+                    self.assertEqual(out[other], data[other], (block, other))
+            self.assertIn(recap.OFF[block].split(" (")[0], recap.prompt("L", "p", "d", "w", "dr", "s", "en", [block]), block)
+        self.assertIs(recap.scrub(data, ()), data)
+
+    def test_the_task_for_the_reviewer_drops_the_switched_off_parts(self):
+        full = recap.prompt("L", "p", "d", "w", "dr", "s")
+        for block in recap.WEEK_BLOCKS:
+            short = recap.prompt("L", "p", "d", "w", "dr", "s", "en", [block])
+            if block != "machines":
+                self.assertLess(len(short), len(full), block)
+            self.assertIn("owner switched these blocks off", short, block)
+        self.assertNotIn("owner switched", full)
+        self.assertIn("owner switched", recap.writer_prompt("L", "dr", "fi", "en", ["tokens"]))
+        self.assertNotIn("owner switched", recap.writer_prompt("L", "dr", "fi"))
+
+    def test_the_work_digest_and_the_computers_without_tokens(self):
+        evs = [ev(1, at(2026, 10, 6, 10), "message.received", to="gen", text="banner", channel="web", owner=True),
+               ev(2, at(2026, 10, 6, 10, 5), "turn.result", "gen", tokens_in=1000, tokens_out=10)]
+        work = recap.items(evs, at(2026, 10, 12, 0), {"gen": "Gen"}, "Mac")
+        on = recap.work_digest("L", at(2026, 10, 5, 0), at(2026, 10, 12, 0), work, ZONE)
+        off = recap.work_digest("L", at(2026, 10, 5, 0), at(2026, 10, 12, 0), work, ZONE, hide=["tokens"])
+        self.assertIn("oken", on)
+        self.assertNotIn("oken", off)
+        self.assertEqual(recap.machine_report(work, {}, "Mac", {}, {"Mac"}, tokens=False), [{"name": "Mac"}])
+        self.assertIn("tokens", recap.machine_report(work, {}, "Mac", {}, {"Mac"})[0])
+
+    # -- the daily recap
+
+    def day_state(self):
+        mine = snap("Mac.local", self.NOW, [task("d1", "gen", "working", self.NOW - 3600, "ролики"),
+                                            task("d2", "dev", "waiting-owner", self.NOW - 7200, "правка"),
+                                            task("d3", "dev", "stopped", self.NOW - 86400, "сборка")],
+                    {"ads": [{"id": "T-1", "title": "сториборд", "status": "To Do"}]})
+        return mine
+
+    def test_each_daily_block_leaves_the_text(self):
+        mine = self.day_state()
+        full = recap.day_text("L", mine, {}, self.NOW, ZONE, {"Mac.local"})
+        marks = {"wait": "Waiting for you", "work": "In progress", "stuck": "No movement", "backlog": "Agents' backlogs"}
+        for block, mark in marks.items():
+            self.assertIn(mark, full)
+            text = recap.day_text("L", mine, {}, self.NOW, ZONE, {"Mac.local"}, "en", [block])
+            self.assertNotIn(mark, text, block)
+            for other, m in marks.items():
+                if other != block:
+                    self.assertIn(m, text, (block, other))
+        self.assertIn("Jira", full)
+        self.assertTrue(recap.day_text("L", mine, {}, self.NOW, ZONE, (), "en", ["jira"]).endswith("*No data: meetings, calendar, Teams*"))
+        everything = recap.day_text("L", mine, {}, self.NOW, ZONE, (), "en", ["wait", "work", "stuck", "backlog", "jira"])
+        self.assertEqual(everything.strip(), "*No data: meetings, calendar, Teams*")     # not "nothing in progress"
+
+    def test_the_daily_digest_and_task_follow_the_choice(self):
+        mine = self.day_state()
+        jira = {"url": "https://x.example", "projects": ["A"]}
+        full = recap.day_digest("L", mine, {}, self.NOW, ZONE, (), jira)
+        part = recap.day_digest("L", mine, {}, self.NOW, ZONE, (), jira, ["jira", "backlog", "wait"])
+        self.assertIn("Jira (MCP atlassian)", full)
+        self.assertIn("direction backlogs", full)
+        self.assertIn("waits for you", full)
+        for gone in ("Jira", "direction backlogs", "waits for you"):
+            self.assertNotIn(gone, part)
+        self.assertIn("in progress", part)
+        task_full = recap.day_prompt("L", "d", "o", jira)
+        task_part = recap.day_prompt("L", "d", "o", jira, "en", ["decided", "jira"])
+        self.assertNotIn("owner switched", task_full)
+        self.assertIn("owner switched these blocks off", task_part)
+        self.assertLess(len(task_part), len(task_full))
+
+    def test_the_daily_flow_follows_hub_json(self):
+        self.config({"day_hide": ["wait", "jira", "backlog"]})
+        others = tempfile.mkdtemp()
+        main.OTHERS = others
+        orig = recap.open_now
+        recap.open_now = lambda st, now, droot: self.day_state()
+        self.addCleanup(lambda: setattr(recap, "open_now", orig))
+        mine = {"weeks": {"2026-W42": {"notified": 1}}}
+        state = {"sessions": self.FLEET, "feeds": {"week-recap": [self.post("day: 09:00 Europe/Berlin")]}}
+        send = lambda *a: self.sent.append(a)   # noqa: E731
+        main.tick(self.NOW, mine, state, send, self.home, self.home)
+        (_, _, to_analyst), = [a for a in self.sent if a[0] == "message.received"]
+        self.assertIn("owner switched these blocks off", to_analyst["text"])
+        day = mine["days"]["2026-10-21"]
+        self.assertEqual(day["hide"], ["wait", "backlog", "jira"])      # in the table order
+        with open(day["digest"], encoding="utf-8") as f:
+            digest = f.read()
+        self.assertNotIn("Jira", digest)
+        self.assertNotIn("waits for you", digest)
+        self.sent.clear()
+        main.tick(self.NOW + main.DAY_WAIT + 1, mine, state, send, self.home, self.home)   # the analyst is silent: the plugin's text
+        (_, _, note), = [a for a in self.sent if a[0] == "owner.notify"]
+        self.assertNotIn("Waiting for you", note["text"])
+        self.assertNotIn("backlogs", note["text"])
+        self.assertIn("In progress", note["text"])
+        self.assertTrue(note["text"].endswith("*No data: meetings, calendar, Teams*"))
+
+    # -- the tab
+
+    def test_the_tab_lists_the_same_blocks_in_both_languages(self):
+        js = read("web", "main.js")
+        found = (node("const src = " + json.dumps(js[js.index("const BLOCKS = {"):js.index("const pending")]) +
+                                ";\neval(src.replace('const BLOCKS', 'globalThis.B'));\nconsole.log(JSON.stringify(globalThis.B));"))
+        self.assertEqual({k: tuple(v) for k, v in found.items()}, dict(recap.BLOCKS))
+        en, ru = tab_eval("en", "[STR.en.block, STR.ru.block]")
+        for names in (en, ru):
+            self.assertEqual(set(names), set(recap.WEEK_BLOCKS) | set(recap.DAY_BLOCKS))
+        self.assertEqual(tab_eval("ru", 't("blocks_title")'), "Что показывают рекапы")
+        self.assertEqual(tab_eval("en", 't("blocks_day")'), "Daily recap")
+
+    def test_what_the_tab_posts_the_process_takes(self):
+        js = read("web", "main.js")
+        self.assertIn("`blocks ${kind}: ${now.length ? now.join(\", \") : \"-\"}`", js)
+        self.assertEqual(recap.blocks_posts({"feeds": {"week-recap": [self.post("blocks week: tokens, todo"),
+                                                                          self.post("blocks day: -")]}}),
+                         {"week": ["tokens", "todo"], "day": []})
+
+
 class Language(unittest.TestCase):
     """Prompts to the models are English and name the report language; what the owner reads is en/ru by the hub language."""
 
@@ -990,7 +1280,7 @@ class Language(unittest.TestCase):
         for key in ("description", "why"):
             self.assertNotRegex(man[key], CYRILLIC, key)
             self.assertRegex(man["i18n"]["ru"][key], CYRILLIC, key)
-        self.assertEqual(man["version"], "2.5.0")
+        self.assertEqual(man["version"], "2.6.0")
 
 
 def node(prog):

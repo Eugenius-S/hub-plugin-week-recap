@@ -39,6 +39,19 @@ Build the digest by hand, sending nothing: `python3 main.py --week 2026-W41 --dr
 
 Install: "Settings" -> "Plugins" -> week-recap. The first review is of last week, right after installing.
 
+## What the recaps show
+
+The weekly and the daily recap each have their own choice of blocks: the Week tab -> "What the recaps show" (untick what
+you do not want to see). A switched-off block is in no text, no report, no rich message (no picture of it either) and
+is not in the task for the analyst and the writer. By default everything is on.
+
+- Weekly: `insights`, `numbers`, `themes`, `tokens` (the counts and the shares everywhere - in the numbers, the chart, the
+  themes, the computers), `together`, `todo`, `machines`.
+- Daily: `decided`, `wait`, `work`, `stuck`, `backlog`, `jira`. The daily recap has no tokens at all.
+
+The tab saves the choice within a minute into hub.json: `extensions.<this plugin>.week_hide` / `day_hide`, a list of
+the switched-off names (a missing key - all on). The same by hand: `"week_hide": ["tokens"]`; it applies to the next recap.
+
 ## Daily recap
 
 Every morning (9:00 local time of the machine, or at the first start of the hub after 9:00) one message arrives:

@@ -25,3 +25,8 @@
 .wr-table th, .wr-table td { text-align: left; vertical-align: top; padding: 4px 8px; border-bottom: 1px solid var(--border, #ddd); }
 .wr-table th { color: var(--muted-foreground, #888); font-weight: 500; }
 .wr-tldr { margin: var(--space-2, 8px) 0; line-height: 1.5; }
+.wr-blocks { margin: 0 0 var(--space-4, 16px); }
+.wr-sub { font-size: var(--text-base, 15px); margin: 0 0 var(--space-1, 4px); }
+.wr-group { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2, 8px) var(--space-3, 12px); margin: var(--space-2, 8px) 0; }
+.wr-group .wr-label { min-width: 9em; }
+.wr-check { display: inline-flex; align-items: center; gap: 4px; font-size: var(--text-sm, 14px); cursor: pointer; }
