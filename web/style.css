@@ -30,3 +30,6 @@
 .wr-group { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2, 8px) var(--space-3, 12px); margin: var(--space-2, 8px) 0; }
 .wr-group .wr-label { min-width: 9em; }
 .wr-check { display: inline-flex; align-items: center; gap: 4px; font-size: var(--text-sm, 14px); cursor: pointer; }
+
+/* Clean (html.th-clean): the link is the text color of the theme, not the blue accent */
+html.th-clean .wr-link { color: var(--c-t1, var(--foreground)); text-decoration: underline; text-underline-offset: 2px; }
