@@ -204,7 +204,7 @@ export default function register(h) {
   hub = h;
   hub.addStyle("web/style.css");
   hub.addView({
-    id: "week-recap", title: t("title"), subtitle: t("subtitle"), icon: "clock",
+    id: "week-recap", title: t("title"), subtitle: t("subtitle"), icon: "icon.svg", icon_themes: { clean: "icon-clean.svg" },
     render(root) { if (box !== root) { box = root; box.classList.add("wr"); } paint(); },
     show() { load(); },
   });

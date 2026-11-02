@@ -1280,7 +1280,13 @@ class Language(unittest.TestCase):
         for key in ("description", "why"):
             self.assertNotRegex(man[key], CYRILLIC, key)
             self.assertRegex(man["i18n"]["ru"][key], CYRILLIC, key)
-        self.assertEqual(man["version"], "2.7.0")
+        self.assertEqual(man["version"], "2.8.0")
+
+    def test_view_icon_has_a_file_per_theme(self):
+        main = read("web/main.js")
+        self.assertIn('icon: "icon.svg", icon_themes: { clean: "icon-clean.svg" }', main)
+        for f in ("icon.svg", "icon-clean.svg"):
+            self.assertIn('viewBox="0 0 24 24"', read(f), f)
 
 
 def node(prog):
