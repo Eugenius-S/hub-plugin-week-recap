@@ -414,8 +414,9 @@ def publish(label, w, data, now, send=put):
     lang = _lang()
     title = tr(lang, "title", week=data["week"])
     if not (rich_on() and send_rich(label, w, data, lang, title, send)):
-        heads = [f"• {str(x.get('title') or '').strip()}" for x in (data.get("insights") or [])[:3]
-                 if isinstance(x, dict) and str(x.get("title") or "").strip()]
+        done = [i for th in data.get("themes") or [] if isinstance(th, dict) for i in th.get("items") or []
+                if isinstance(i, dict) and i.get("state") == "done" and str(i.get("title") or "").strip()]
+        heads = [f"• {str(x['title']).strip()}" for x in done[:3]]   # what was done, not the tips: the tasks come first
         send("owner.notify", None, {"title": title,
                                     "text": "\n\n".join([str(data.get("tldr") or "").strip(), *(["\n".join(heads)] if heads else []),
                                                          tr(lang, "full", path=w["report"])]),

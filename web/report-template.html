@@ -81,7 +81,7 @@
   .ic.sm { width: 16px; height: 16px; }
 
   /* numbers */
-  .numbers { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--s5) var(--s4); margin: 0; }
+  .numbers { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--s5) var(--s4); margin: 0; }
   .numbers div { min-width: 0; display: flex; flex-direction: column; }
   .numbers dd { order: -1; }
   .numbers dd { margin: 0; font: 600 30px/1.1 var(--serif); font-variant-numeric: tabular-nums; letter-spacing: -.01em; }
@@ -140,6 +140,10 @@
   /* tokens */
   .tokens .line { display: flex; justify-content: space-between; gap: var(--s4); align-items: baseline; }
   .tokens .val { color: var(--ink-2); font-size: 15px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .tokens .numbers { margin-bottom: var(--s5); }
+  .tokens .machines { margin: 0 0 var(--s6); }
+  .share + .share { margin-top: var(--s4); }
+  .tokens h3 { margin: 0; font-size: 16px; font-weight: 600; }
   .bar { margin-top: var(--s2); height: 6px; border-radius: 3px; background: var(--bar-track); overflow: hidden; }
   .bar i { display: block; height: 100%; border-radius: 3px; background: var(--bar); }
 
@@ -207,14 +211,8 @@
     <p class="tldr" id="tldr"></p>
   </header>
 
-  <section id="s-insights">
-    <h2><svg class="ic"><use href="#i-tips"/></svg><span data-t="insights">Insights</span></h2>
-    <div id="insights"></div>
-  </section>
-
   <section id="s-numbers" aria-label="Numbers of the week" data-t-aria="numbers_aria">
     <dl class="numbers" id="numbers"></dl>
-    <ul class="machines" id="machines" data-t-aria="machines_aria"></ul>
   </section>
 
   <section id="s-themes">
@@ -237,12 +235,24 @@
     <p class="sub" id="notfiled-sub" data-t="notfiled">Discussed, but no task</p>
     <ul class="items notfiled" id="notfiled"></ul>
   </section>
+
+  <section id="s-tokens" class="tokens">
+    <h2><svg class="ic"><use href="#i-tokens"/></svg><span data-t="tokens">Tokens</span></h2>
+    <dl class="numbers" id="tok-numbers"></dl>
+    <ul class="machines" id="machines" data-t-aria="machines_aria"></ul>
+    <div id="shares"></div>
+  </section>
+
+  <section id="s-insights">
+    <h2><svg class="ic"><use href="#i-tips"/></svg><span data-t="insights">Tips on working with the hub</span></h2>
+    <div id="insights"></div>
+  </section>
 </main>
 
 <script id="recap-data" type="application/json">
 {
   "week": "Oct 5–11",
-  "tldr": "This week the hub and the plugins took most of the tokens, and 14 spring illustrations are done. The sharpest thing: three tasks were set without a \"done when...\" and came back for rework - about a third of the week's tokens.",
+  "tldr": "12 of 17 tasks are done, 7 of them on the first try: the Telegram digest, the weekly recap for both computers and the spring ad video. In progress: the chat sync between computers.",
   "insights": [
     {"kind": "improve", "title": "Tasks without \"done when...\" were redone", "what": "\"Make prompts for the summer set\" (Tue) came back three times: 4.1M tokens, two of the three rounds were about what the result should look like.", "try": "Add the finish line to the task: \"prompts for 5 objects, like the spring box, done when I have picked in the design tool\"."},
     {"kind": "broken", "title": "A form waited for you for four days", "what": "The question about the cover format sat from Monday to Friday; the session worked on guesses and its 1.8M tokens went to a version you did not want.", "try": "Answer forms from Telegram on the go, or say \"decide yourself\" in the task."},
@@ -292,22 +302,22 @@
   const STR = {
     en: {
       title: "Week", your_week: "Your week", week: "Week {week}", numbers_aria: "Numbers of the week",
-      insights: "Insights", themes: "What was done", machines_aria: "Computers in this report",
+      insights: "Tips on working with the hub", themes: "What was done", tokens: "Where the tokens went", machines_aria: "Computers in this report",
       k_unknown: "You may not know", k_improve: "Worth improving", k_broken: "Quietly broke", try_now: "Try: ",
       st_done: "done", st_progress: "in progress", st_dropped: "dropped", no_export: "{name}: no work received",
       together: "How we worked together", good: "Went easily", slow: "Slowed down",
       todo: "For this week", filed: "Already filed", notfiled: "Discussed, but no task",
-      tokens_n: "{n} tokens", first_try: "first try", next: "Next: ", bar_aria: "{pct}% of the week's tokens",
+      tokens_n: "{n} tokens", done_of: "done {d} of {n}", first_try: "first try", next: "Next: ", bar_aria: "{pct}% of the week's tokens",
       open: "Open",
     },
     ru: {
       title: "Неделя", your_week: "Ваша неделя", week: "Неделя {week}", numbers_aria: "Цифры недели",
-      insights: "Инсайты", themes: "Что сделано", machines_aria: "Компьютеры в этом отчёте",
+      insights: "Советы по работе с хабом", themes: "Что сделано", tokens: "Куда ушли токены", machines_aria: "Компьютеры в этом отчёте",
       k_unknown: "Возможно, вы не знали", k_improve: "Стоит улучшить", k_broken: "Тихо ломалось", try_now: "Попробовать: ",
       st_done: "сделано", st_progress: "в работе", st_dropped: "брошено", no_export: "{name}: работа не пришла",
       together: "Как работали вместе", good: "Шло легко", slow: "Тормозило",
       todo: "На эту неделю", filed: "Уже заведено", notfiled: "Обсуждали, но задачи нет",
-      tokens_n: "{n} токенов", first_try: "с первого раза", next: "Дальше: ", bar_aria: "{pct}% токенов недели",
+      tokens_n: "{n} токенов", done_of: "сдано {d} из {n}", first_try: "с первого раза", next: "Дальше: ", bar_aria: "{pct}% токенов недели",
       open: "Открыть",
     },
   };
@@ -354,15 +364,19 @@
   $("tldr").textContent = tldr;
   $("tldr").hidden = !tldr;
 
-  // numbers
-  const nums = list(d.numbers).filter((n) => text(n.value));
-  nums.forEach((n) => {
+  // numbers: the tasks on top; the tokens tile goes down to the tokens block
+  const tokenTile = (n) => /token|\u0442\u043e\u043a\u0435\u043d/i.test(text(n.label));
+  const tile = (n, into) => {
     const box = el("div");
     const dt = el("dt", null, text(n.label));
     if (text(n.hint)) dt.append(el("span", "hint", text(n.hint)));
     add(box, dt, el("dd", null, text(n.value)));
-    $("numbers").append(box);
-  });
+    $(into).append(box);
+  };
+  const all = list(d.numbers).filter((n) => text(n.value));
+  const nums = all.filter((n) => !tokenTile(n)), toks = all.filter(tokenTile);
+  nums.forEach((n) => tile(n, "numbers"));
+  show("s-numbers", nums.length);
 
   // insights
   const kinds = { unknown: "k_unknown", improve: "k_improve", broken: "k_broken" };
@@ -384,27 +398,20 @@
     $("machines").append(li);
   });
   show("machines", $("machines").childNodes.length);
-  show("s-numbers", nums.length || $("machines").childNodes.length);
 
   // themes
   const states = { done: "st_done", progress: "st_progress", dropped: "st_dropped" };
   const themes = list(d.themes).filter((x) => text(x.title));
   themes.forEach((th) => {
     const box = el("article", "theme"), head = el("header"), line = el("div", "line");
-    const share = Math.max(0, Math.min(1, Number(th.share) || 0)), pct = Math.round(share * 100);
-    add(line, el("h3", null, text(th.title)), el("span", "val", [text(th.tokens) && t("tokens_n", { n: text(th.tokens) }), pct ? pct + "%" : ""].filter(Boolean).join(" · ")));
-    const bar = el("div", "bar"), fill = el("i");
-    fill.style.width = (share * 100).toFixed(1) + "%";
-    bar.append(fill);
-    bar.setAttribute("role", "img");
-    bar.setAttribute("aria-label", t("bar_aria", { pct }));
-    add(head, line, share && bar);   // tokens switched off - no shares, no bar
+    const its = list(th.items).filter((x) => text(x.title)), done = its.filter((x) => (states[x.state] ? x.state : "done") === "done").length;
+    add(line, el("h3", null, text(th.title)), its.length && el("span", "val", t("done_of", { d: done, n: its.length })));
+    head.append(line);
     const ul = el("ul", "items");
     list(th.items).filter((x) => text(x.title)).forEach((x) => {
       const st = states[x.state] ? x.state : "done";
       const li = el("li", st), row = el("div", "row"), body = el("div");
-      add(body, el("p", "title", text(x.title)), meta(x.tokens && t("tokens_n", { n: text(x.tokens) })),
-          text(x.story) && el("p", "story", text(x.story)));
+      add(body, el("p", "title", text(x.title)), text(x.story) && el("p", "story", text(x.story)));
       if (st === "progress" && text(x.next)) { const p = el("p", "next"); p.append(el("b", null, t("next")), text(x.next)); body.append(p); }
       const tag = el("span", "tag " + (st === "done" && x.first_try ? "good" : st));
       if (st === "done") tag.append(icon("i-check", "sm"));
@@ -417,6 +424,24 @@
     $("themes").append(box);
   });
   show("s-themes", themes.length);
+
+  // tokens (optional, at the bottom): the total, the computers, the share of each theme
+  toks.forEach((n) => tile(n, "tok-numbers"));
+  show("tok-numbers", toks.length);
+  const shares = themes.filter((th) => Number(th.share) > 0).sort((a, b) => Number(b.share) - Number(a.share));
+  shares.forEach((th) => {
+    const share = Math.min(1, Number(th.share)), pct = Math.round(share * 100);
+    const row = el("div", "share"), line = el("div", "line");
+    add(line, el("h3", null, text(th.title)), el("span", "val", [text(th.tokens) && t("tokens_n", { n: text(th.tokens) }), pct ? pct + "%" : ""].filter(Boolean).join(" · ")));
+    const bar = el("div", "bar"), fill = el("i");
+    fill.style.width = (share * 100).toFixed(1) + "%";
+    bar.append(fill);
+    bar.setAttribute("role", "img");
+    bar.setAttribute("aria-label", t("bar_aria", { pct }));
+    add(row, line, bar);
+    $("shares").append(row);
+  });
+  show("s-tokens", toks.length || shares.length || $("machines").childNodes.length);
 
   // together
   const tg = d.together || {};

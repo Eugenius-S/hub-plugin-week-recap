@@ -851,12 +851,12 @@ class Blocks(unittest.TestCase):
     # -- the setting and the post from the tab
 
     def test_the_lists_are_what_the_code_really_has(self):
-        self.assertEqual(recap.BLOCKS["week"], ("insights", "numbers", "themes", "tokens", "together", "todo", "machines"))
+        self.assertEqual(recap.BLOCKS["week"], ("themes", "numbers", "together", "todo", "tokens", "insights", "machines"))
         self.assertEqual(recap.BLOCKS["day"], ("decided", "wait", "work", "stuck", "backlog", "jira"))
         self.assertNotIn("tokens", recap.BLOCKS["day"])   # the daily recap has no tokens at all
 
     def test_hidden_knows_only_its_own_names_once_in_the_table_order(self):
-        self.assertEqual(recap.hidden("week", ["todo", "Tokens", "tokens", "nope", 5]), ["tokens", "todo"])
+        self.assertEqual(recap.hidden("week", ["todo", "Tokens", "tokens", "nope", 5]), ["todo", "tokens"])
         self.assertEqual(recap.hidden("day", ["tokens"]), [])          # not a block of the day
         for bad in (None, "tokens", 3, {"tokens": 1}):
             self.assertEqual(recap.hidden("week", bad), [])
@@ -864,7 +864,7 @@ class Blocks(unittest.TestCase):
     def test_the_post_from_the_tab(self):
         def got(*posts, **kw):
             return recap.blocks_posts({"feeds": {"week-recap": list(posts)}, **kw})
-        self.assertEqual(got(self.post("blocks week: tokens, todo")), {"week": ["tokens", "todo"]})
+        self.assertEqual(got(self.post("blocks week: tokens, todo")), {"week": ["todo", "tokens"]})
         self.assertEqual(got(self.post("blocks week: tokens"), self.post("blocks week: -")), {"week": []})   # the last one
         self.assertEqual(got(self.post("blocks week: todo"), self.post("blocks day: wait jira")),
                          {"week": ["todo"], "day": ["wait", "jira"]})
@@ -880,8 +880,8 @@ class Blocks(unittest.TestCase):
         state = {"feeds": {"week-recap": feed}}
         self.assertTrue(main.apply_blocks(self.mine, state))
         entry = self.saved()["extensions"][main.NAME]
-        self.assertEqual(entry, {"path": "x", "other": 1, "week_hide": ["tokens", "todo"]})   # all on - no key
-        self.assertEqual(main.hide_of("week"), ["tokens", "todo"])
+        self.assertEqual(entry, {"path": "x", "other": 1, "week_hide": ["todo", "tokens"]})   # all on - no key
+        self.assertEqual(main.hide_of("week"), ["todo", "tokens"])
         self.assertEqual(main.hide_of("day"), [])
         self.assertFalse(main.apply_blocks(self.mine, state))                      # the same post - nothing again
         self.config({"week_hide": ["insights"]})                                   # the owner edits hub.json by hand ...
@@ -1100,7 +1100,7 @@ class Blocks(unittest.TestCase):
         self.assertIn("`blocks ${kind}: ${now.length ? now.join(\", \") : \"-\"}`", js)
         self.assertEqual(recap.blocks_posts({"feeds": {"week-recap": [self.post("blocks week: tokens, todo"),
                                                                           self.post("blocks day: -")]}}),
-                         {"week": ["tokens", "todo"], "day": []})
+                         {"week": ["todo", "tokens"], "day": []})
 
 
 class Language(unittest.TestCase):
@@ -1280,7 +1280,7 @@ class Language(unittest.TestCase):
         for key in ("description", "why"):
             self.assertNotRegex(man[key], CYRILLIC, key)
             self.assertRegex(man["i18n"]["ru"][key], CYRILLIC, key)
-        self.assertEqual(man["version"], "2.6.1")
+        self.assertEqual(man["version"], "2.7.0")
 
 
 def node(prog):
@@ -1377,7 +1377,7 @@ class Template(unittest.TestCase):
         self.assertIn("d.lang", html)
         self.assertIn("document.documentElement.lang = lang", html)
         self.assertEqual(json.loads(re.search(r'<script id="recap-data" type="application/json">(.*?)</script>', html, re.S)[1])
-                         ["tldr"][:9], "This week")
+                         ["tldr"][:9], "12 of 17 ")
 
     def test_the_sample_is_the_embedded_sample(self):
         html = read("web", "report-template.html")

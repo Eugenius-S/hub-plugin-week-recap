@@ -5,13 +5,14 @@ changed in the Week tab -> "Edit" (or tell the hub: `hub post week-recap "schedu
 `schedule: mon start` means the first start of the hub on that day). The Russian words for the keyword, the days
 and "start" are accepted too.
 
-- **Insights** - the main part, first in the report: what you may not know about the hub, what quietly broke or hung
-  during the week, what to improve in how you set tasks and give feedback - each with an example from the week.
-- **What was done** - by themes (the hub itself, plugins, design, videos, every other project): the tokens of each
-  task and each video, first try or with rework, what was dropped. The cost is only tokens, never money.
+- **What was done** - the main part, first in the report: the week's tasks by themes (the hub itself, plugins, design,
+  videos, every other project), done on the first try or with rework, in progress, dropped.
 - **Both computers** - the work of the Mac and of Windows is in one report (the other computer's work comes through the
   hub-sync exchange, `work/<machine>/<week>.jsonl`); the report shows which computers are covered and which sent nothing.
 - **For the week** - tasks from Jira (open ones on you), Teams (waiting for your answer) and Granola (agreed, but no task).
+- **Tokens and tips on working with the hub** - an optional block at the very bottom: where the tokens went (by theme
+  and by computer; the cost is only tokens, never money) and what to know or change in working with the hub - each tip
+  with an example from the week. Switch it off with the `tokens` and `insights` blocks.
 
 How it works: the plugin process reads the hub journal for the week (read only) and builds a digest; the review is
 written by the `analyst` agent if there is one, otherwise by the hub. The finished review arrives in Telegram and in the
@@ -19,9 +20,9 @@ Week tab; if the review does not come within 6 hours, the numbers alone arrive. 
 MCP, if it is connected and granted to whoever writes the review.
 
 Rich Telegram message: with `telegram.rich: true` in hub.json (the hub's own switch for rich messages) the weekly recap goes
-to Telegram as one rich message instead of the short text: the gist, the week's four numbers as a picture, the share of
-tokens by theme as a chart (with the table folded under it), what hurt and what to try, what was done by theme (folded),
-how you worked together, and the tasks for the week. The pictures are drawn by the plugin itself (Pillow; without it or
+to Telegram as one rich message instead of the short text: the gist, the week's task numbers as a picture, what was done
+by theme (folded), how you worked together, the tasks for the week, and at the bottom the tokens (the share by theme as a
+chart with the table folded under it) and the tips on working with the hub. The pictures are drawn by the plugin itself (Pillow; without it or
 without a font with the needed letters the numbers become a list and the shares a table). A recap too long for one
 message is shortened step by step. The report page stays in the Week tab. Without the switch - the short text as before.
 
@@ -45,8 +46,8 @@ The weekly and the daily recap each have their own choice of blocks: the Week ta
 you do not want to see). A switched-off block is in no text, no report, no rich message (no picture of it either) and
 is not in the task for the analyst and the writer. By default everything is on.
 
-- Weekly: `insights`, `numbers`, `themes`, `tokens` (the counts and the shares everywhere - in the numbers, the chart, the
-  themes, the computers), `together`, `todo`, `machines`.
+- Weekly: `themes`, `numbers`, `together`, `todo`, `tokens` (the counts and the shares everywhere - in the numbers, the
+  chart, the themes, the computers), `insights` (the tips on working with the hub), `machines`.
 - Daily: `decided`, `wait`, `work`, `stuck`, `backlog`, `jira`. The daily recap has no tokens at all.
 
 The tab saves the choice within a minute into hub.json: `extensions.<this plugin>.week_hide` / `day_hide`, a list of

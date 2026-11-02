@@ -65,10 +65,17 @@ class Build(unittest.TestCase):
             self.assertTrue(os.path.getsize(p) > 1000)
         self.assertTrue(md.startswith(f"# {TITLE}\n"))
         for part in ("Most tokens went", "numbers.png", "chart-tokens.png", "<details>", "Where the tokens went",
-                     "What hurt and what to try", "Try:", "What was done by theme", "How we worked together",
+                     "Tips on working with the hub", "Try:", "What was done by theme", "How we worked together",
                      "For this week", "[Flags](https://example.com/DSN-1)", "Not filed anywhere"):
             self.assertIn(part, md)
         self.assertLess(md.index("2\u00a0040M"), md.index("1\u00a0360M"))   # by share, the biggest first
+        # the tasks on top; tokens and the tips on working with the hub at the very bottom
+        order = [md.index(x) for x in ("What was done by theme", "How we worked together", "For this week",
+                                         "Where the tokens went", "Tips on working with the hub")]
+        self.assertEqual(order, sorted(order))
+        done = md[md.index("What was done by theme"):md.index("How we worked together")]
+        for count in ("300M", "2\u00a0040M", "60%"):                # no token counts among the tasks
+            self.assertNotIn(count, done)
 
     def test_tokens_switched_off_no_chart_no_counts_no_shares(self):
         data = dict(DATA, tldr="The page took most of the week.")
@@ -93,22 +100,22 @@ class Build(unittest.TestCase):
         self.assertIn("Where the tokens went", md)
 
     def test_each_block_off_leaves_its_section_out(self):
-        for block, mark in (("insights", "What hurt and what to try"), ("themes", "What was done by theme"),
+        for block, mark in (("insights", "Tips on working with the hub"), ("themes", "What was done by theme"),
                             ("together", "How we worked together"), ("todo", "For this week")):
             md, _ = self.build(recap.scrub(DATA, [block]))
             self.assertNotIn(mark, md, block)
-            for other in {"What hurt and what to try", "What was done by theme", "How we worked together",
+            for other in {"Tips on working with the hub", "What was done by theme", "How we worked together",
                           "For this week"} - {mark}:
                 self.assertIn(other, md, (block, other))
 
     def test_russian(self):
         md, _ = self.build(lang="ru")
-        self.assertIn("Что было больно", md)
-        self.assertNotIn("What hurt", md)
+        self.assertIn("Советы по работе с хабом", md)
+        self.assertNotIn("Tips on working", md)
 
     def test_unknown_language_is_english(self):
         md, _ = self.build(lang="xx")
-        self.assertIn("What hurt and what to try", md)
+        self.assertIn("Tips on working with the hub", md)
 
     def test_no_font_no_pictures_the_text_stays_whole(self):
         with mock.patch.object(richpost, "fonts", lambda: None):

@@ -369,7 +369,7 @@ def _write_in(lang):
 
 # Blocks the owner can switch off, per recap. A switched-off block is neither in the text, nor in the rich layout, nor in
 # the task for the reviewer. The setting is in hub.json extensions.<this plugin>: week_hide / day_hide - lists of names.
-WEEK_BLOCKS = ("insights", "numbers", "themes", "tokens", "together", "todo", "machines")
+WEEK_BLOCKS = ("themes", "numbers", "together", "todo", "tokens", "insights", "machines")   # in the order of the report
 DAY_BLOCKS = ("decided", "wait", "work", "stuck", "backlog", "jira")
 BLOCKS = {"week": WEEK_BLOCKS, "day": DAY_BLOCKS}
 OPTIONS = {"week": "week_hide", "day": "day_hide"}
@@ -429,21 +429,10 @@ def prompt(label, period, digest_path, work_path, draft_path, sample_path, lang=
     hide - the blocks the owner switched off: their points are not in the task."""
     on = lambda b: b not in hide   # noqa: E731
     parts = []
-    if on("insights"):
-        parts.append(
-            "The main part - insights about working with the hub (the `insights` list, 3-6 items, the sharpest first). "
-            "What the owner may not know: hub abilities they do not use, and what quietly broke or hung this week (tasks "
-            "not delivered, a session or a form that waited for days, work that went quiet, two computers that did not "
-            "agree). What to improve critically in their own feedback and way of setting tasks: where they set a task "
-            "unclearly and then redid it, repeated one request, answered a form late, gave no \"done when...\"; and in "
-            "how the hub and agents worked for them. Each insight: kind (unknown / improve / broken), a title in one "
-            "line, what exactly happened with a concrete example from this week (the date, the task"
-            + (", the tokens it cost" if on("tokens") else "") + "), and what to do next (`try`). No general advice without an example. You may check the facts with "
-            "`hub status`, `hub task show dN`, `hub coach`.")
     if on("themes"):
         parts.append(
-            "What was done, by themes (the `themes` list): merge discussions and tasks into the owner's human tasks "
-            "(one goal - one item) and group them by topic: work on the hub itself (the page, Telegram, the core, sync "
+            "The main part - what was done, by themes (the `themes` list): the report opens with it. Merge discussions "
+            "and tasks into the owner's human tasks (one goal - one item) and group them by topic: work on the hub itself (the page, Telegram, the core, sync "
             "between computers), plugins that were developed, Hub Design and the designer, videos, and every other "
             "project from work.md (a ## section; none is dropped, a small one - a line). "
             + ("Every item has its own tokens - "
@@ -455,6 +444,18 @@ def prompt(label, period, digest_path, work_path, draft_path, sample_path, lang=
             + ": an animator - to "
             "animation, a prompt engineer and an image-generation script - to generative styles; a plugin for the hub "
             "page - to plugins.")
+    if on("insights"):
+        parts.append(
+            "Tips on working with the hub (the `insights` list, 3-6 items, the sharpest first) - an optional block at the very "
+            "bottom of the report, next to the tokens: the owner measures the week by the tasks, not by these. "
+            "What the owner may not know: hub abilities they do not use, and what quietly broke or hung this week (tasks "
+            "not delivered, a session or a form that waited for days, work that went quiet, two computers that did not "
+            "agree). What to improve critically in their own feedback and way of setting tasks: where they set a task "
+            "unclearly and then redid it, repeated one request, answered a form late, gave no \"done when...\"; and in "
+            "how the hub and agents worked for them. Each insight: kind (unknown / improve / broken), a title in one "
+            "line, what exactly happened with a concrete example from this week (the date, the task"
+            + (", the tokens it cost" if on("tokens") else "") + "), and what to do next (`try`). No general advice without an example. You may check the facts with "
+            "`hub status`, `hub task show dN`, `hub coach`.")
     if on("todo") or on("together"):
         parts.append(
             "Jira (MCP atlassian), Granola (MCP granola), Teams (MCP ms365) - read only: what was closed this week, "
@@ -463,7 +464,7 @@ def prompt(label, period, digest_path, work_path, draft_path, sample_path, lang=
     if on("together"):
         parts.append(
             "How you worked together: where the pair went easily and where it slowed down - short, with examples "
-            "(the details go to insights).")
+            "(the details go to the tips).")
     if on("todo"):
         parts.append(
             "Todo for this week: filed (Jira - open ones on the owner, Teams - waiting for their answer) and not filed "
@@ -481,6 +482,8 @@ def prompt(label, period, digest_path, work_path, draft_path, sample_path, lang=
         f"tasks and questions in time order - `{digest_path}`. The frame is all of their work for the week, not only "
         f"your area. {money}"
         f"{steps}"
+        "`tldr` - 1-3 sentences on what was done this week: the main finished tasks and results, how many items are "
+        "done; no tokens and no advice in it.\n"
         f"{human(on('tokens'))}\n{_write_in(lang)}\n"
         f"{off_line(hide, WEEK_BLOCKS)}"
         f"The result is the file `{draft_path}`: JSON like `{sample_path}` (the same keys; an empty section - an empty "

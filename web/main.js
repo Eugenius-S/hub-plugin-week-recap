@@ -18,7 +18,7 @@ const STR = {
     blocks_title: "What the recaps show", blocks_hint: "Untick what you do not want to see: it leaves the text, the report and the Telegram message.",
     blocks_week: "Weekly recap", blocks_day: "Daily recap", blocks_saved: "saved, applies to the next recap",
     block: {
-      insights: "Insights", numbers: "Numbers", themes: "What was done", tokens: "Tokens", together: "How we worked together",
+      insights: "Tips on the hub", numbers: "Numbers", themes: "What was done", tokens: "Tokens", together: "How we worked together",
       todo: "Todo", machines: "By computers", decided: "Decided", wait: "Waiting for you", work: "In progress",
       stuck: "Stuck", backlog: "Backlog", jira: "Jira",
     },
@@ -36,7 +36,7 @@ const STR = {
     blocks_title: "Что показывают рекапы", blocks_hint: "Сними галочку с того, что не нужно: блок уйдёт из текста, отчёта и сообщения в Telegram.",
     blocks_week: "Недельный рекап", blocks_day: "Дневной рекап", blocks_saved: "сохранено, применится к следующему рекапу",
     block: {
-      insights: "Инсайты", numbers: "Цифры", themes: "Что сделано", tokens: "Токены", together: "Как работали вместе",
+      insights: "Советы по хабу", numbers: "Цифры", themes: "Что сделано", tokens: "Токены", together: "Как работали вместе",
       todo: "Задачи на неделю", machines: "По компьютерам", decided: "Решено", wait: "Ждёт тебя", work: "В работе",
       stuck: "Застряло", backlog: "Очередь", jira: "Jira",
     },
@@ -150,7 +150,7 @@ function when() {
 // to the plugin channel - the process writes it into hub.json (a page cannot) within a minute. Until data.json shows the
 // same, the choice stays here, so the ticks do not jump back.
 const BLOCKS = {
-  week: ["insights", "numbers", "themes", "tokens", "together", "todo", "machines"],
+  week: ["themes", "numbers", "together", "todo", "tokens", "insights", "machines"],
   day: ["decided", "wait", "work", "stuck", "backlog", "jira"],
 };
 const pending = {};

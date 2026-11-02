@@ -1,9 +1,9 @@
 {
   "name": "week-recap",
   "icon": "icon.png",
-  "description": "Every Monday, a recap of last week from all your computers: what was done and the tokens it took, insights on working with the hub, tasks from Jira, Teams and Granola. Every morning, a short daily recap: what was decided yesterday, what is expected at today's meetings, what is in progress.",
-  "why": "Once a week you see what was really done, how many tokens it took, and - the main thing - what to learn or change in working with the hub; and every morning - what hangs in progress now",
-  "version": "2.6.2",
+  "description": "Every Monday, a recap of last week from all your computers: what was done, tasks from Jira, Teams and Granola, and at the bottom the tokens and tips on working with the hub. Every morning, a short daily recap: what was decided yesterday, what is expected at today's meetings, what is in progress.",
+  "why": "Once a week you see what was really done and what is next, with the tokens and tips on working with the hub as an extra at the bottom; and every morning - what hangs in progress now",
+  "version": "2.7.0",
   "hub": "^1.2",
   "run": [
     "python3",
@@ -12,8 +12,8 @@
   "web": "web/main.js",
   "i18n": {
     "ru": {
-      "description": "Каждый понедельник рекап прошлой недели по всем вашим компьютерам: что сделано и сколько это стоило в токенах, инсайты о работе с хабом, задачи из Jira, Teams и Granola. Каждое утро короткий дневной рекап: что решили вчера, что ждут от вас на сегодняшних встречах, что в работе.",
-      "why": "Раз в неделю видно, что реально сделано, сколько это стоило в токенах и — главное — что стоит узнать или поменять в работе с хабом; а по утрам — что сейчас висит в работе"
+      "description": "Каждый понедельник рекап прошлой недели по всем вашим компьютерам: что сделано, задачи из Jira, Teams и Granola, а внизу токены и советы по работе с хабом. Каждое утро короткий дневной рекап: что решили вчера, что ждут от вас на сегодняшних встречах, что в работе.",
+      "why": "Раз в неделю видно, что реально сделано и что дальше, а токены и советы по работе с хабом лежат внизу как дополнение; а по утрам — что сейчас висит в работе"
     }
   }
 }

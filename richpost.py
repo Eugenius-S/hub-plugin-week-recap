@@ -1,7 +1,8 @@
 """The weekly recap as a Telegram rich message (hub `telegram.rich`): a markdown with two pictures, built from recap.json.
 
 build(data, lang, folder) writes <folder>/recap.md and, if Pillow and a font with the needed letters are there,
-numbers.png (the week's numbers in tiles) and chart-tokens.png (the share of tokens by theme). No Pillow or no font -
+numbers.png (the week's task numbers in tiles) and chart-tokens.png (the share of tokens by theme). The order: what was
+done first; tokens and the tips on working with the hub - an optional block at the very bottom. No Pillow or no font -
 no pictures: the numbers become a list and the shares a table. The rich limits of the core (32768 characters, 50 files)
 are kept: a long recap is shortened step by step. Nothing here talks to the hub: it only reads the data and writes files.
 """
@@ -24,7 +25,7 @@ STR = {
         "tokens_table": "Tokens by theme in numbers",
         "col_theme": "Theme", "col_tokens": "Tokens", "col_share": "Share", "col_done": "Done",
         "x_of_y": "{d} of {n}", "done_of": "done {d} of {n}", "under_one": "under 1%",
-        "pain_h": "What hurt and what to try", "try": "Try:",
+        "pain_h": "Tips on working with the hub", "try": "Try:",
         "themes_h": "What was done by theme",
         "first": "First try.", "next": "Next:",
         "together_h": "How we worked together", "good": "Went well", "slow": "Slowed us down",
@@ -38,7 +39,7 @@ STR = {
         "tokens_table": "Токены по темам цифрами",
         "col_theme": "Тема", "col_tokens": "Токены", "col_share": "Доля", "col_done": "Сдано",
         "x_of_y": "{d} из {n}", "done_of": "сдано {d} из {n}", "under_one": "меньше 1%",
-        "pain_h": "Что было больно и что попробовать", "try": "Попробовать:",
+        "pain_h": "Советы по работе с хабом", "try": "Попробовать:",
         "themes_h": "Что сделано по темам",
         "first": "С первого раза.", "next": "Дальше:",
         "together_h": "Как работали вместе", "good": "Получилось", "slow": "Тормозило",
@@ -67,6 +68,15 @@ def esc(x):
 def sentence(x):
     x = text(x)
     return x if not x or x[-1] in ".!?\u2026:" else x + "."
+
+
+def token_tile(n):
+    """A numbers tile about tokens (it goes down to the tokens block, the tasks stay on top)."""
+    return isinstance(n, dict) and any(w in text(n.get("label")).lower() for w in ("token", "токен"))
+
+
+def task_tiles(data):
+    return [n for n in data.get("numbers") or [] if isinstance(n, dict) and not token_tile(n)]
 
 
 def tokens(x):
@@ -173,7 +183,7 @@ def header(draw, font_for, kicker, title):
 
 def draw_numbers(path, lang, data, font_for):
     from PIL import Image, ImageDraw
-    nums = [n for n in data.get("numbers") or [] if isinstance(n, dict)][:6]
+    nums = task_tiles(data)[:6]
     rows = (len(nums) + 1) // 2
     top, tile_h, gap = 192, 376, 26
     img = Image.new("RGB", (WIDTH, top + rows * tile_h + (rows - 1) * gap + 50), PAPER)
@@ -234,7 +244,7 @@ def pictures(folder, lang, data):
     if not font_for:
         return out
     for key, name, draw, has in (
-            ("numbers", NUMBERS, draw_numbers, [n for n in data.get("numbers") or [] if isinstance(n, dict)]),
+            ("numbers", NUMBERS, draw_numbers, task_tiles(data)),
             ("chart", CHART, draw_chart, by_share(data))):
         if not has:
             continue
@@ -267,50 +277,23 @@ def build_md(data, lang, imgs, title, level=0):
     brief = level >= 1
     cut = (lambda s: text(s)[:170].rsplit(" ", 1)[0] + "\u2026" if len(text(s)) > 180 else text(s)) if brief else text
     out = [f"# {esc(title)}", "", esc(data.get("tldr")), ""]
-    nums = [n for n in data.get("numbers") or [] if isinstance(n, dict)]
+    nums = task_tiles(data)
     if imgs.get("numbers"):
         out += [image(imgs["numbers"], t(lang, "numbers_alt")), ""]
     elif nums:
         out += [f"- **{esc(n.get('value'))}** {esc(n.get('label'))}" + (f": {esc(n.get('hint'))}" if text(n.get("hint")) else "")
                 for n in nums] + [""]
     themes = [x for x in data.get("themes") or [] if isinstance(x, dict)]
-    shares = by_share(data)
-    if shares:
-        out += [f"## {t(lang, 'tokens_h')}", ""]
-        rows = ["| " + " | ".join(t(lang, k) for k in ("col_theme", "col_tokens", "col_share", "col_done")) + " |",
-                "|---|---:|---:|---:|"]
-        for th in shares:
-            done, n = counted(th)
-            rows.append(f"| {esc(th.get('title'))} | {esc(tokens(th.get('tokens')))} | {shown(lang, th['share'])} | "
-                        f"{t(lang, 'x_of_y', d=done, n=n) if n else ''} |")
-        if imgs.get("chart"):
-            out += [image(imgs["chart"], t(lang, "chart_alt")), "", *details(t(lang, "tokens_table"), rows), ""]
-        else:
-            out += [*rows, ""]
-    insights = [x for x in data.get("insights") or [] if isinstance(x, dict) and text(x.get("title"))]
-    if insights:
-        out += [f"## {t(lang, 'pain_h')}", ""]
-        for k, x in enumerate(insights, 1):
-            out += [f"### {k}. {esc(x.get('title'))}", ""]
-            if text(x.get("what")):
-                out += [esc(cut(x.get("what"))), ""]
-            if text(x.get("try")):
-                out += [f"**{t(lang, 'try')}** {esc(cut(x.get('try')))}", ""]
     if themes:
         out += [f"## {t(lang, 'themes_h')}", "", t(lang, "legend"), ""]
         for th in themes:
             done, n = counted(th)
-            head = " \u00b7 ".join(p for p in (text(th.get("title")), tokens(th.get("tokens")),
-                                                t(lang, "done_of", d=done, n=n) if n else "") if p)
+            head = " \u00b7 ".join(p for p in (text(th.get("title")), t(lang, "done_of", d=done, n=n) if n else "") if p)
             lines = []
             for i in th.get("items") or []:
                 if not isinstance(i, dict) or not text(i.get("title")):
                     continue
-                line = f"- {STATES.get(i.get('state'), STATES['progress'])} **{esc(i.get('title'))}**"
-                if text(i.get("tokens")):
-                    line += f" \u00b7 {esc(tokens(i.get('tokens')))}."
-                else:
-                    line += "."
+                line = f"- {STATES.get(i.get('state'), STATES['progress'])} **{esc(i.get('title'))}**."
                 if text(i.get("story")) and level < 2:
                     line += f" {esc(sentence(cut(i.get('story'))))}"
                 if i.get("state") == "done" and i.get("first_try"):
@@ -346,6 +329,31 @@ def build_md(data, lang, imgs, title, level=0):
             name = esc(text(x.get("title")).rstrip(".") + ".")
             rows.append(f"- **{name}**" + (f" {esc(sentence(cut(x.get('why'))))}" if text(x.get("why")) else ""))
         out += [*details(f"{t(lang, 'not_filed')} \u00b7 {len(loose)}", rows), ""]
+    shares = by_share(data)
+    toks = [n for n in data.get("numbers") or [] if token_tile(n)]
+    if shares or toks:
+        out += [f"## {t(lang, 'tokens_h')}", ""]
+        out += [f"- **{esc(n.get('value'))}** {esc(n.get('label'))}" + (f": {esc(n.get('hint'))}" if text(n.get("hint")) else "")
+                for n in toks] + ([""] if toks else [])
+        rows = ["| " + " | ".join(t(lang, k) for k in ("col_theme", "col_tokens", "col_share", "col_done")) + " |",
+                "|---|---:|---:|---:|"]
+        for th in shares:
+            done, n = counted(th)
+            rows.append(f"| {esc(th.get('title'))} | {esc(tokens(th.get('tokens')))} | {shown(lang, th['share'])} | "
+                        f"{t(lang, 'x_of_y', d=done, n=n) if n else ''} |")
+        if shares and imgs.get("chart"):
+            out += [image(imgs["chart"], t(lang, "chart_alt")), "", *details(t(lang, "tokens_table"), rows), ""]
+        elif shares:
+            out += [*rows, ""]
+    insights = [x for x in data.get("insights") or [] if isinstance(x, dict) and text(x.get("title"))]
+    if insights:
+        out += [f"## {t(lang, 'pain_h')}", ""]
+        for k, x in enumerate(insights, 1):
+            out += [f"### {k}. {esc(x.get('title'))}", ""]
+            if text(x.get("what")):
+                out += [esc(cut(x.get("what"))), ""]
+            if text(x.get("try")):
+                out += [f"**{t(lang, 'try')}** {esc(cut(x.get('try')))}", ""]
     return "\n".join(out).rstrip() + "\n"
 
 

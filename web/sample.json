@@ -1,6 +1,6 @@
 {
   "week": "Oct 5–11",
-  "tldr": "This week the hub and the plugins took most of the tokens, and 14 spring illustrations are done. The sharpest thing: three tasks were set without a \"done when...\" and came back for rework - about a third of the week's tokens.",
+  "tldr": "12 of 17 tasks are done, 7 of them on the first try: the Telegram digest, the weekly recap for both computers and the spring ad video. In progress: the chat sync between computers.",
   "insights": [
     {"kind": "improve", "title": "Tasks without \"done when...\" were redone", "what": "\"Make prompts for the summer set\" (Tue) came back three times: 4.1M tokens, two of the three rounds were about what the result should look like.", "try": "Add the finish line to the task: \"prompts for 5 objects, like the spring box, done when I have picked in the design tool\"."},
     {"kind": "broken", "title": "A form waited for you for four days", "what": "The question about the cover format sat from Monday to Friday; the session worked on guesses and its 1.8M tokens went to a version you did not want.", "try": "Answer forms from Telegram on the go, or say \"decide yourself\" in the task."},
