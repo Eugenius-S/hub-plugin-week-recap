@@ -38,6 +38,8 @@ def clean(x):
 
 OWNER_CHANNELS = ("web", "telegram", "cli")
 FORM = "AskUserQuestion"
+TEXT_WINDOW = 24 * 3600   # a card is answered in words if the owner wrote to its session within a day (the core's ASK_TTL)
+TEXT_ANSWER = "текстом"   # shown in the digest as the answer: in words in the chat, not by the buttons
 CUT = 400                  # how many characters of a text go into the digest for the review
 
 # Protocol marker, not UI text: the hub core starts the message that carries the owner's answer to a form with these
@@ -246,6 +248,25 @@ def _median_min(xs):
     return round(statistics.median(xs) / 60, 1) if xs else None
 
 
+def _answered_by_text(forms, msgs):
+    """The owner often answers a card in the session's chat instead of the buttons (no permission.answered then, the core
+    closes such a card itself). A card with no answer counts as answered in words if the owner wrote to its session after
+    it, before the session's next card and within TEXT_WINDOW; a card closed with a click (dismissed) does not."""
+    by_session = {}
+    for f in forms.values():
+        by_session.setdefault(f["session"], []).append(f)
+    for cards in by_session.values():
+        cards.sort(key=lambda f: f["ts"])
+        for i, f in enumerate(cards):
+            if f["answered"] or f.get("dismissed"):
+                continue
+            nxt = cards[i + 1]["ts"] if i + 1 < len(cards) else float("inf")
+            word = next((m for m in msgs if m["to"] == f["session"] and f["ts"] < m["ts"] < nxt
+                         and m["ts"] - f["ts"] <= TEXT_WINDOW), None)
+            if word:
+                f["answered"], f["answer"] = word["ts"], TEXT_ANSWER
+
+
 def measure(evs):
     """The week's numbers and material for the review: owner messages, tasks, forms, turns per session."""
     msgs, answers, forms, perms, tasks, files = [], [], {}, 0, {}, 0
@@ -265,6 +286,8 @@ def measure(evs):
         elif t == "permission.answered" and d.get("request_id") in forms and _owner(d):
             f = forms[d["request_id"]]
             f["answered"], f["answer"] = ts, " / ".join(str(v) for v in (d.get("answers") or {}).values())
+        elif t == "question.dismissed" and d.get("request_id") in forms and _owner(d):
+            forms[d["request_id"]]["dismissed"] = True   # closed with a click, no answer: later words are not its answer
         elif t == "delegation.created":
             tasks[f"d{e['seq']}"] = {"id": f"d{e['seq']}", "ts": ts, "session": d.get("session"), "for": d.get("for"),
                                      "context": str(d.get("context") or ""), "done": None}
@@ -278,6 +301,7 @@ def measure(evs):
             s["busy_min"] += (d.get("duration_ms") or 0) / 60000
             if str(d.get("text") or "").strip():
                 results.setdefault(ent, []).append(ts)
+    _answered_by_text(forms, msgs)
     waits = []
     for m in msgs:
         sessions.setdefault(m["to"], {"turns": 0, "busy_min": 0.0, "owner_msgs": 0})["owner_msgs"] += 1

@@ -209,6 +209,54 @@ class Numbers(unittest.TestCase):
         self.assertEqual(recap.ANSWER_MARK, "Ответ владельца на вопрос")   # spelled by code points in recap.py
 
 
+class TextAnswer(unittest.TestCase):
+    """A card the owner answered in the session's chat (no permission.answered: the core closes it itself)."""
+    T = at(2026, 10, 6, 10)
+
+    def card(self, seq, ts, session="analyst"):
+        return ev(seq, ts, "permission.requested", session, request_id=f"r{seq}", tool="AskUserQuestion",
+                  input={"questions": [{"question": f"Q{seq}?"}]})
+
+    def forms(self, *events):
+        return {f["id"]: f for f in recap.measure(list(events))["forms"]}
+
+    def test_the_owners_words_to_the_session_answer_the_card(self):
+        f = self.forms(self.card(1, self.T), ev(2, self.T + 600, "message.received", to="analyst", text="go with A", **OWNER))["q1"]
+        self.assertEqual((f["answered"], f["answer"]), (self.T + 600, "текстом"))
+
+    def test_words_to_another_session_do_not(self):
+        f = self.forms(self.card(1, self.T), ev(2, self.T + 600, "message.received", to="designer", text="go", **OWNER))["q1"]
+        self.assertIsNone(f["answered"])
+
+    def test_words_of_a_session_or_before_the_card_do_not(self):
+        f = self.forms(ev(1, self.T - 60, "message.received", to="analyst", text="earlier", **OWNER), self.card(2, self.T),
+                       ev(3, self.T + 60, "message.received", to="analyst", text="a session", channel="session", owner=False,
+                          sender="designer"))["q2"]
+        self.assertIsNone(f["answered"])
+
+    def test_words_after_the_next_card_or_a_day_later_do_not(self):
+        fs = self.forms(self.card(1, self.T), self.card(2, self.T + 300),
+                        ev(3, self.T + 600, "message.received", to="analyst", text="go", **OWNER))
+        self.assertIsNone(fs["q1"]["answered"])               # the next card came first: the words answer that one
+        self.assertEqual(fs["q2"]["answer"], "текстом")
+        late = self.forms(self.card(1, self.T), ev(2, self.T + 24 * 3600 + 1, "message.received", to="analyst", text="go", **OWNER))
+        self.assertIsNone(late["q1"]["answered"])
+
+    def test_a_card_closed_with_a_click_stays_unanswered(self):
+        f = self.forms(self.card(1, self.T), ev(2, self.T + 60, "question.dismissed", "analyst", request_id="r1", **OWNER),
+                       ev(3, self.T + 120, "message.received", to="analyst", text="go", **OWNER))["q1"]
+        self.assertIsNone(f["answered"])
+
+    def test_the_buttons_answer_is_kept_and_the_numbers_count_the_words(self):
+        m = recap.measure([self.card(1, self.T), ev(2, self.T + 60, "permission.answered", "analyst", request_id="r1",
+                                                    answers={"Q1?": "A"}, **OWNER),
+                           self.card(3, self.T + 120),
+                           ev(4, self.T + 720, "message.received", to="analyst", text="go", **OWNER)])
+        n = m["numbers"]
+        self.assertEqual((n["forms"], n["forms_answered"], n["form_answer_median_min"]), (2, 2, 5.5))
+        self.assertIn("form q3 from analyst: Q3? → answered in 10 min: текстом", recap.digest("W", self.T - 1, self.T + 9999, m, ZONE))
+
+
 class Flow(unittest.TestCase):
     def setUp(self):
         self.state = journal_dir([WEEK])
