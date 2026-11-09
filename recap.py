@@ -436,7 +436,8 @@ def prompt(label, period, digest_path, work_path, draft_path, sample_path, lang=
             "Hub Design and the designer, videos, and every other project from work.md (a ## section). "
             "Order by importance for the owner, both the themes and the items inside a theme: first what reached people "
             "and clients, money, and what waits for the owner's decision; then the working projects; the small things "
-            "last, a line each, or left out. Not everything has to get in: the report is for the owner, not an archive. "
+            "last, a line each, or left out. Inside a theme the items go: done, then in progress, then dropped; the items "
+            "\"Other...\" and \"Minor...\" last; equal - the more tokens first. Not everything has to get in: the report is for the owner, not an archive. "
             "Do not include the hub's own kitchen: counts of hub tasks, sync between computers, the choice of a repo, "
             "intermediate discussions, \"not delivered on Windows/Mac\" about internal hub tasks. Work on the hub itself "
             "(the page, Telegram, the core) gets in only when the owner sees the result "
@@ -509,6 +510,35 @@ def writer_prompt(label, draft_path, final_path, lang="en", hide=()):
         + "Leave links and sources as they are. Keep the order: the most important for the owner first. Remove the internal and technical things they do not need, and the hub's own kitchen (hub task counts, sync between computers, repo choice, intermediate discussions). "
         f"{human(on('tokens'))}\n{off_line(hide, WEEK_BLOCKS)}{_write_in(lang)}\n"
         f"The result is the file `{final_path}`, the same JSON. The result of your turn is one line: \"done\".")
+
+
+def tokens_value(text):
+    """'14.5M' / '800k' / '120' -> a number for sorting; no tokens in the item - 0."""
+    m = re.match(r"\s*([\d.,]+)\s*([MmMkKкК]?)", str(text or ""))
+    if not m:
+        return 0.0
+    try:
+        n = float(m[1].replace(",", "."))
+    except ValueError:
+        return 0.0
+    return n * {"m": 1e6, "k": 1e3, "к": 1e3}.get(m[2].lower(), 1)
+
+
+MINOR = ("minor", "other", "misc", "small", "мелкие", "прочие")
+STATE_RANK = {"done": 0, "progress": 1, "dropped": 2}
+
+
+def order_items(data):
+    """The items inside a theme: done first, then in progress, then dropped; "Other / Minor" items last; equal - by
+    tokens, more first (09.11). A copy; the model's order of the themes stays."""
+    if not isinstance(data, dict):
+        return data
+    key = lambda i: (str(i.get("title") or "").lower().startswith(MINOR),   # noqa: E731
+                     STATE_RANK.get(i.get("state"), 1), -tokens_value(i.get("tokens")))
+    themes = [{**th, "items": sorted(th["items"], key=lambda i: key(i) if isinstance(i, dict) else (1, 1, 0))}
+              if isinstance(th, dict) and isinstance(th.get("items"), list) else th
+              for th in data.get("themes") or []]
+    return {**data, "themes": themes} if "themes" in data else data
 
 
 def scrub(data, hide):

@@ -362,6 +362,21 @@ class Work(unittest.TestCase):
         self.assertIn("hub's own kitchen", writer)
         self.assertNotIn("hub's own kitchen", recap.day_prompt("2026-10-21", "/o.md", "/r.json", None))
 
+    def test_items_in_a_theme_go_done_then_progress_then_dropped_minor_last(self):
+        """09.11: the owner's order of items inside a theme."""
+        it = lambda t, st, tok: {"title": t, "state": st, "tokens": tok}   # noqa: E731
+        data = {"themes": [{"title": "T", "items": [
+            it("Minor things", "done", "9M"), it("Dropped big", "dropped", "8M"), it("Going small", "progress", "1M"),
+            it("Done small", "done", "500k"), it("Done big", "done", "2.5M"), it("Going big", "progress", "3M"),
+            it("Прочие дела", "done", "7M")]}]}
+        got = [i["title"] for i in recap.order_items(data)["themes"][0]["items"]]
+        self.assertEqual(got, ["Done big", "Done small", "Going big", "Going small", "Dropped big",
+                               "Minor things", "Прочие дела"])
+        self.assertEqual(recap.order_items({"tldr": "x"}), {"tldr": "x"})
+        no_tokens = {"themes": [{"items": [{"title": "b", "state": "progress"}, {"title": "a", "state": "done"}, "odd"]}]}
+        self.assertEqual(recap.order_items(no_tokens)["themes"][0]["items"][0]["title"], "a")
+        self.assertIn("then in progress, then dropped", recap.prompt("L", "p", "d", "w", "dr", "s"))
+
     def test_every_project_is_in_the_work_digest_even_a_small_one(self):
         """14.10: of 118 lines of the week the first 60 by tokens were almost all work on the hub; ads went into "the rest"."""
         work = [{"id": f"m{i}", "kind": "discussion", "session": "dev", "where": "Hub", "topic": f"edit {i}",
@@ -1294,7 +1309,7 @@ class Language(unittest.TestCase):
         for key in ("description", "why"):
             self.assertNotRegex(man[key], CYRILLIC, key)
             self.assertRegex(man["i18n"]["ru"][key], CYRILLIC, key)
-        self.assertEqual(man["version"], "2.8.0")
+        self.assertEqual(man["version"], "2.8.1")
 
 
 def node(prog):

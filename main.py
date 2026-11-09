@@ -403,8 +403,9 @@ def writer(state):
 
 def publish(label, w, data, now, send=put):
     """The report in the designer's HTML (labels in the week's language), a copy for the link from the page, the owner gets the TL;DR and the path."""
-    data = recap.scrub({"week": w.get("period") or label, **data, "machines": w.get("machines") or [],
-                        "lang": recap.norm(w.get("lang") or _lang())}, w.get("hide") or ())
+    data = recap.scrub(recap.order_items({"week": w.get("period") or label, **data, "machines": w.get("machines") or [],
+                        "lang": recap.norm(w.get("lang") or _lang())}),
+                        w.get("hide") or ())
     with open(TEMPLATE, encoding="utf-8") as f:
         html = recap.render(f.read(), data)
     with open(w["report"], "w", encoding="utf-8") as f:
