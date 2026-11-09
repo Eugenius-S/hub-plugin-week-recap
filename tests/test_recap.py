@@ -348,6 +348,20 @@ class Work(unittest.TestCase):
         self.assertIn("an animator - to animation", text)
         self.assertIn("belongs to the topic it serves", text)
 
+    def test_the_prompt_orders_by_importance_and_leaves_out_the_hub_kitchen(self):
+        """09.11: the owner called the hub's internal intermediate items garbage and asked for the order by importance."""
+        text = recap.prompt("2026-W41", "Oct 5-9", "/d.md", "/w.md", "/draft.json", "/sample.json")
+        self.assertNotIn("none is dropped", text)
+        self.assertNotIn("work on the hub itself (the page, Telegram, the core, sync", text)
+        self.assertIn("Order by importance for the owner", text)
+        self.assertLess(text.index("reached people"), text.index("working projects"))
+        self.assertIn("hub's own kitchen", text)
+        self.assertIn("owner sees the result", text)
+        writer = recap.writer_prompt("2026-W41", "/d.json", "/f.json")
+        self.assertIn("the most important for the owner first", writer)
+        self.assertIn("hub's own kitchen", writer)
+        self.assertNotIn("hub's own kitchen", recap.day_prompt("2026-10-21", "/o.md", "/r.json", None))
+
     def test_every_project_is_in_the_work_digest_even_a_small_one(self):
         """14.10: of 118 lines of the week the first 60 by tokens were almost all work on the hub; ads went into "the rest"."""
         work = [{"id": f"m{i}", "kind": "discussion", "session": "dev", "where": "Hub", "topic": f"edit {i}",
@@ -1280,7 +1294,7 @@ class Language(unittest.TestCase):
         for key in ("description", "why"):
             self.assertNotRegex(man[key], CYRILLIC, key)
             self.assertRegex(man["i18n"]["ru"][key], CYRILLIC, key)
-        self.assertEqual(man["version"], "2.7.0")
+        self.assertEqual(man["version"], "2.8.0")
 
 
 def node(prog):

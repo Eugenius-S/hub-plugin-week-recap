@@ -420,7 +420,7 @@ def human(tokens=True):
             "tokens\"), at every task and every item." if tokens else
             "Money is never mentioned: no currencies and no prices, and no token counts either.")
     return ("Write for a person, not for a system: in plain words, as a colleague tells the results of the week. Their "
-            "tasks and results (illustrations, ads, videos, texts, plugins, the hub itself), what became possible - not "
+            "tasks and results (illustrations, ads, videos, texts, plugins), what became possible - not "
             "commits, branches, tests, ids like mN/dN/qN, paths or model names. Numbers - round and clear. " + cost)
 
 
@@ -432,9 +432,15 @@ def prompt(label, period, digest_path, work_path, draft_path, sample_path, lang=
     if on("themes"):
         parts.append(
             "The main part - what was done, by themes (the `themes` list): the report opens with it. Merge discussions "
-            "and tasks into the owner's human tasks (one goal - one item) and group them by topic: work on the hub itself (the page, Telegram, the core, sync "
-            "between computers), plugins that were developed, Hub Design and the designer, videos, and every other "
-            "project from work.md (a ## section; none is dropped, a small one - a line). "
+            "and tasks into the owner's human tasks (one goal - one item) and group them by topic: plugins that were developed, "
+            "Hub Design and the designer, videos, and every other project from work.md (a ## section). "
+            "Order by importance for the owner, both the themes and the items inside a theme: first what reached people "
+            "and clients, money, and what waits for the owner's decision; then the working projects; the small things "
+            "last, a line each, or left out. Not everything has to get in: the report is for the owner, not an archive. "
+            "Do not include the hub's own kitchen: counts of hub tasks, sync between computers, the choice of a repo, "
+            "intermediate discussions, \"not delivered on Windows/Mac\" about internal hub tasks. Work on the hub itself "
+            "(the page, Telegram, the core) gets in only when the owner sees the result "
+            "(a new button, Telegram started to do X) - and then as that result, under the topic it serves. "
             + ("Every item has its own tokens - "
                "each video, each plugin, each task: the sum of its lines of work.md, from both computers. A theme's tokens "
                "and share are the sum of its items. " if on("tokens") else "")
@@ -500,7 +506,7 @@ def writer_prompt(label, draft_path, final_path, lang="en", hide=()):
         "pleasant and quick to read. Do not change the meaning, facts and numbers; nor the JSON structure and keys; "
         "the insights keep their examples and their sharpness - do not soften or generalize them; "
         + ("the tokens of every item stay. " if on("tokens") else "do not add token counts. ")
-        + "Leave links and sources as they are. Remove the internal and technical things they do not need. "
+        + "Leave links and sources as they are. Keep the order: the most important for the owner first. Remove the internal and technical things they do not need, and the hub's own kitchen (hub task counts, sync between computers, repo choice, intermediate discussions). "
         f"{human(on('tokens'))}\n{off_line(hide, WEEK_BLOCKS)}{_write_in(lang)}\n"
         f"The result is the file `{final_path}`, the same JSON. The result of your turn is one line: \"done\".")
 
