@@ -46,7 +46,7 @@ WAIT = 6 * 3600          # no draft in 6 h - the owner gets the numbers only
 WRITER_WAIT = 3 * 3600   # the writer did not answer in 3 h - the report goes out from the draft
 TEMPLATE = os.path.join(HERE, "web", "report-template.html")
 SAMPLE = os.path.join(HERE, "web", "sample.json")
-OTHERS = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(catalog.__file__))), "hub-sync", "work")
+OTHERS = os.path.join(recap.sync_dir() or os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(catalog.__file__))), "hub-sync"), "work")
 REPORTS = os.path.join(HERE, "web", "reports")   # a copy of the report for the link from the hub page
 KEEP = 12                # weeks in the tab
 STARTED = time.time()    # when the process came up: "mon start" - the first start of the hub on Monday
@@ -584,6 +584,7 @@ def main():
         write(OUT, view(mine))
         print(f"handed over for review: {mine['weeks'][label].get('to')}; digest: {mine['weeks'][label]['digest']}")
         return
+    lost = None
     shown = view(mine)
     write(OUT, shown)
     while True:
@@ -595,6 +596,10 @@ def main():
             if now_view != shown:
                 shown = now_view
                 write(OUT, shown)
+        except recap.SyncMissing as e:   # no redact: nothing is collected or sent; said once, not on every tick
+            if str(e) != lost:
+                lost = str(e)
+                print(f"week-recap: {e}", file=sys.stderr, flush=True)
         except Exception as e:   # noqa: BLE001 - a failed tick does not kill the process; the hub would restart it, but for nothing
             print(f"week-recap: {e!r}", file=sys.stderr, flush=True)
         time.sleep(EVERY)

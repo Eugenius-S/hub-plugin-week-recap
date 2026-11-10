@@ -10,20 +10,83 @@ import json
 import os
 import re
 import statistics
+import sys
 import zoneinfo
 
 
-def _sync():
-    """hub-sync/sync.py из репо ядра (папка над пакетом core): его SECRET/redact — одна ловля секретов на хаб."""
+class SyncMissing(RuntimeError):
+    """hub-sync/sync.py is not found: the secrets guard (redact) is not there, so nothing may go out."""
+
+
+_SYNC = None
+HUB_SYNC_ENTRY = "hub-sync-chats"   # the hub's own extension that runs hub-sync/sync.py: its `run` names the repo's file
+
+
+def _core_root():
     core = importlib.util.find_spec("core")
-    path = os.path.join(os.path.dirname(os.path.dirname(core.origin)), "hub-sync", "sync.py")
-    spec = importlib.util.spec_from_file_location("hub_sync_for_recap", path)
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    return mod
+    return os.path.dirname(os.path.dirname(core.origin)) if core and core.origin else None
 
 
-redact = _sync().redact
+def _hub_config():
+    """hub.json as a dict; unreadable or absent - {} (the values are never printed)."""
+    try:
+        from core import catalog
+        state = os.environ.get("HUB_STATE_DIR") or ""
+        cfg = catalog.load_config(state) if state else catalog.read_settings(catalog.config_path(state))
+        return cfg if isinstance(cfg, dict) else {}
+    except Exception:   # noqa: BLE001 - a core without them, a busy or broken file: the other places are tried
+        return {}
+
+
+def find_sync(core_root=None, env=None, config=None):
+    """Path of hub-sync/sync.py (its SECRET/redact is the one secrets catcher per hub), in order: <core>/hub-sync (the
+    repo checkout), $HUB_SYNC_DIR, the folder of the sync.py named in hub.json extensions.hub-sync-chats.run (a packaged
+    core has no hub-sync of its own; it lives in the clone). None - nowhere. Never raises on an odd hub.json."""
+    env = os.environ if env is None else env
+    dirs = []
+    if core_root:
+        dirs.append(os.path.join(core_root, "hub-sync"))
+    if env.get("HUB_SYNC_DIR"):
+        dirs.append(env["HUB_SYNC_DIR"])
+    try:
+        entry = ((config or {}).get("extensions") or {}).get(HUB_SYNC_ENTRY)
+        run = entry.get("run") if isinstance(entry, dict) else None
+        for part in run if isinstance(run, list) else []:
+            if isinstance(part, str) and os.path.basename(part) == "sync.py":
+                dirs.append(os.path.dirname(part))
+    except (AttributeError, TypeError):
+        pass
+    for d in dirs:
+        path = os.path.join(d, "sync.py")
+        if os.path.isfile(path):
+            return path
+    return None
+
+
+def sync_dir():
+    """The hub-sync folder this hub uses (where work/ of the other hubs lives too); None - not found."""
+    path = find_sync(_core_root(), os.environ, _hub_config())
+    return os.path.dirname(path) if path else None
+
+
+def _sync():
+    """hub-sync/sync.py as a module; not found - SyncMissing with what to do (not at import: the plugin must start)."""
+    global _SYNC
+    if _SYNC is None:
+        path = find_sync(_core_root(), os.environ, _hub_config())
+        if not path:
+            raise SyncMissing("hub-sync/sync.py not found (looked in the core's repo, $HUB_SYNC_DIR and the sync.py of "
+                              f"hub.json extensions.{HUB_SYNC_ENTRY}.run): without its redact nothing is sent; "
+                              "set HUB_SYNC_DIR to the hub-sync folder")
+        spec = importlib.util.spec_from_file_location("hub_sync_for_recap", path)
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        _SYNC = mod
+    return _SYNC
+
+
+def redact(x):
+    return _sync().redact(x)
 
 
 def clean(x):
@@ -855,7 +918,11 @@ def day_due(now, zone, done, when=DAY_DEFAULT):
 def open_now(state, now, droot):
     """This hub's snapshot of open work - by the same function the exchange uploads with (hub-sync/sync.py), so this hub and
     the others look alike. A core without it (the hub has not updated yet) - None."""
-    fn = getattr(_sync(), "open_snapshot", None)
+    try:
+        fn = getattr(_sync(), "open_snapshot", None)
+    except SyncMissing as e:
+        print(f"week-recap: {e}", file=sys.stderr, flush=True)
+        return None
     return fn(state, now, droot) if fn else None
 
 

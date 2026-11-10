@@ -3,7 +3,7 @@
   "icon": "icon.png",
   "description": "Every Monday, a recap of last week from all your computers: what was done, tasks from Jira, Teams and Granola, and at the bottom the tokens and tips on working with the hub. Every morning, a short daily recap: what was decided yesterday, what is expected at today's meetings, what is in progress.",
   "why": "Once a week you see what was really done and what is next, with the tokens and tips on working with the hub as an extra at the bottom; and every morning - what hangs in progress now",
-  "version": "2.8.2",
+  "version": "2.8.3",
   "hub": "^1.2",
   "run": [
     "python3",
