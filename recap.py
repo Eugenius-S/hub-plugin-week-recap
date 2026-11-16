@@ -681,6 +681,7 @@ def reviewer(state):
 
 THREAD_GAP = 3 * 3600      # an owner's messages to one session closer than this - one discussion
 FADED = 24 * 3600          # a discussion without new words of the owner for longer than this - went quiet
+TURN_WINDOW = THREAD_GAP    # a turn without a task that began later than this after the owner's last word - its own
 LIVELY = 3                 # this many words of the owner in a discussion - "active"
 
 
@@ -691,10 +692,11 @@ def tokens(d):
 def items(evs, end, where=None, me="this"):
     """The week's work in human terms: the owner's discussions with a session (their messages in a row, gaps shorter
     than THREAD_GAP) and tasks dN. Every turn of a session goes to the task it leads (the last open one), otherwise to
-    its last discussion; its tokens go there too, and "machines" - the same tokens by the computer the turn ran on
-    (me - the name of ours; sessions of another hub carry @<machine>). A discussion where the owner wrote at least
-    LIVELY times and then fell silent for longer than FADED before the week's end "went quiet": the reviewer decides
-    (done or dropped). Kinds: "discussion", "task", "own"."""
+    its last discussion if the turn began within TURN_WINDOW of the owner's last word in it (later - the session's own:
+    routine, other sessions' requests and a schedule do not stick to a talk that is over); its tokens go there too, and
+    "machines" - the same tokens by the computer the turn ran on (me - the name of ours; sessions of another hub carry
+    @<machine>). A discussion where the owner wrote at least LIVELY times and then fell silent for longer than FADED
+    before the week's end "went quiet": the reviewer decides (done or dropped). Kinds: "discussion", "task", "own"."""
     where = where or {}
     topic = lambda s: where.get(s) or _base(s)   # noqa: E731
     out, last_thread, open_tasks, own = [], {}, {}, {}
@@ -704,14 +706,14 @@ def items(evs, end, where=None, me="this"):
                 not str(d.get("text") or "").startswith(ANSWER_MARK):
             s = d["to"]
             th = last_thread.get(s)
-            if not th or ts - th["last"] > THREAD_GAP:
+            if not th or ts - th["said"] > THREAD_GAP:   # the owner's words in a row; a session's turns do not chain them
                 th = {"id": f"m{e['seq']}", "kind": "discussion", "session": s, "where": topic(s),
                       "topic": str(d.get("text") or ""), "first": ts, "last": ts, "owner_msgs": 0,
                       "tokens": 0, "machines": {}, "turns": 0}
                 last_thread[s] = th
                 out.append(th)
             th["owner_msgs"] += 1
-            th["last"] = ts
+            th["last"] = th["said"] = ts
         elif t == "delegation.created" and d.get("session"):
             s = d["session"]
             # the task was set by a working session (a direction asked for a script, an agent) - tokens go to its topic, not to the hub
@@ -729,7 +731,10 @@ def items(evs, end, where=None, me="this"):
                         tasks.remove(task)
                         break
         elif t == "turn.result" and ent:
-            box = (open_tasks.get(ent) or [None])[-1] or last_thread.get(ent) or own.get(ent)
+            th = last_thread.get(ent)
+            began = ts - (d.get("duration_ms") or 0) / 1000   # a long turn on the owner's word ends hours later
+            th = th if th and began - th["said"] <= TURN_WINDOW else None
+            box = (open_tasks.get(ent) or [None])[-1] or th or own.get(ent)
             if not box:   # a turn without an owner's request this week - the session's own (schedule, watchdog)
                 box = own[ent] = {"id": f"s:{ent}", "kind": "own", "session": ent, "where": topic(ent), "topic": "",
                                   "first": ts, "last": ts, "owner_msgs": 0, "tokens": 0, "machines": {}, "turns": 0}
@@ -742,6 +747,7 @@ def items(evs, end, where=None, me="this"):
     for x in out:
         if x["kind"] == "discussion":
             x["faded"] = x["owner_msgs"] >= LIVELY and end - x["last"] >= FADED
+            del x["said"]
     return sorted(out, key=lambda x: -x["tokens"])
 
 

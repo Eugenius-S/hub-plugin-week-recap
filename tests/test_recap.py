@@ -376,6 +376,32 @@ class Work(unittest.TestCase):
         self.assertFalse(work["m10"]["faded"])                          # one word is not an active discussion
         self.assertEqual((work["s:gen"]["tokens"], work["s:gen"]["owner_msgs"]), (5, 0))   # the owner's words are not "its own"
 
+    def test_turns_long_after_the_owner_fell_silent_are_the_sessions_own(self):
+        """W46: a session's routine turns without a task stuck to the owner's last discussion with it for days (340M of
+        413M tokens of the week in one talk). A turn without a task belongs to the discussion only if it began within TURN_WINDOW
+        (3 h) of the owner's last word in it; later - its own; turns outside the window do not move the discussion's end. And the
+        session's turns do not chain the owner's words: one talk is their words with gaps shorter than THREAD_GAP."""
+        d = {"channel": "web", "owner": True}
+        evs = [ev(1, at(2026, 10, 5, 10), "message.received", to="gen", text="make a banner", **d),
+               ev(2, at(2026, 10, 5, 10, 30), "message.received", to="gen", text="edits", **d),
+               ev(3, at(2026, 10, 5, 11), "message.received", to="gen", text="one more", **d),
+               ev(4, at(2026, 10, 5, 12), "turn.result", "gen", tokens_in=100, tokens_out=0),    # 1 h - the talk
+               ev(5, at(2026, 10, 5, 16), "turn.result", "gen", tokens_in=40, tokens_out=0,      # began 11:30 - the talk
+                  duration_ms=int(4.5 * 3600 * 1000)),
+               ev(6, at(2026, 10, 7, 11), "turn.result", "gen", tokens_in=2000, tokens_out=0),   # 2 days - own
+               ev(7, at(2026, 10, 10, 11), "turn.result", "gen", tokens_in=5000, tokens_out=0),  # 5 days - own
+               ev(8, at(2026, 10, 10, 12), "message.received", to="gen", text="next", **d),
+               ev(9, at(2026, 10, 10, 13), "turn.result", "gen", tokens_in=7, tokens_out=0),
+               ev(10, at(2026, 10, 10, 15), "turn.result", "gen", tokens_in=9, tokens_out=0),
+               ev(11, at(2026, 10, 10, 17), "message.received", to="gen", text="later", **d)]   # 5 h after "next"
+        work = {x["id"]: x for x in recap.items(evs, at(2026, 10, 12, 0), {"gen": "Generation"}, "Mac")}
+        self.assertEqual((work["m1"]["tokens"], work["m1"]["turns"]), (140, 2))
+        self.assertEqual((work["s:gen"]["tokens"], work["s:gen"]["turns"]), (7000, 2))
+        self.assertEqual(work["m1"]["last"], at(2026, 10, 5, 16))
+        self.assertTrue(work["m1"]["faded"])                            # a turn days later does not keep it alive
+        self.assertEqual((work["m8"]["owner_msgs"], work["m8"]["tokens"]), (1, 16))
+        self.assertEqual(work["m11"]["owner_msgs"], 1)                  # turns in between do not glue the two talks
+
     def test_a_tool_built_for_a_topic_counts_to_that_topic(self):
         """A hub session's task set by a working session goes to that session's topic."""
         evs = [ev(1, at(2026, 10, 6, 9), "delegation.created", session="hub-dev", context="script: upscale 2048",
@@ -1357,7 +1383,7 @@ class Language(unittest.TestCase):
         for key in ("description", "why"):
             self.assertNotRegex(man[key], CYRILLIC, key)
             self.assertRegex(man["i18n"]["ru"][key], CYRILLIC, key)
-        self.assertEqual(man["version"], "2.8.1")
+        self.assertEqual(man["version"], "2.8.4")
 
 
 def node(prog):
