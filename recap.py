@@ -90,7 +90,7 @@ def redact(x):
 
 
 def clean(x):
-    """Строки события без секретов — до сводки, черновика и отчёта (16.10 токен бота из сообщения попал в digest W42)."""
+    """The event's strings without secrets - before the digest, the draft and the report (16.10: a bot token from a message got into a weekly digest)."""
     if isinstance(x, str):
         return redact(x)
     if isinstance(x, dict):
@@ -102,7 +102,7 @@ def clean(x):
 OWNER_CHANNELS = ("web", "telegram", "cli")
 FORM = "AskUserQuestion"
 TEXT_WINDOW = 24 * 3600   # a card is answered in words if the owner wrote to its session within a day (the core's ASK_TTL)
-TEXT_ANSWER = "текстом"   # shown in the digest as the answer: in words in the chat, not by the buttons
+TEXT_ANSWER = "in words"  # shown in the digest as the answer: in words in the chat, not by the buttons
 CUT = 400                  # how many characters of a text go into the digest for the review
 
 # Protocol marker, not UI text: the hub core starts the message that carries the owner's answer to a form with these

@@ -161,8 +161,8 @@ class Schedule(unittest.TestCase):
         self.assertEqual([e["seq"] for e in got], [e["seq"] for e in WEEK[1:12]])
 
     def test_secrets_from_messages_never_reach_the_digest(self):
-        """Владелец вставил токен бота в сообщение (16.10) — сводка, работа и выгрузка другого хаба его не повторяют."""
-        fake = "1234567890:" + "AAb_c-" * 5 + "Zz9q8"   # фальшивый, по виду токен бота Telegram
+        """The owner pasted a bot token into a message (16.10): the digest, the work and another hub's export do not repeat it."""
+        fake = "1234567890:" + "AAb_c-" * 5 + "Zz9q8"   # fake, looks like a Telegram bot token
         key = "sk-ant-api03-" + "q" * 30
         said = ev(12, at(2026, 10, 7, 10), "message.received", to="hub-core", text=f"бот: {fake}, ключ {key}", **OWNER)
         d = journal_dir([WEEK[1:12] + [said]])
@@ -222,7 +222,7 @@ class TextAnswer(unittest.TestCase):
 
     def test_the_owners_words_to_the_session_answer_the_card(self):
         f = self.forms(self.card(1, self.T), ev(2, self.T + 600, "message.received", to="analyst", text="go with A", **OWNER))["q1"]
-        self.assertEqual((f["answered"], f["answer"]), (self.T + 600, "текстом"))
+        self.assertEqual((f["answered"], f["answer"]), (self.T + 600, "in words"))
 
     def test_words_to_another_session_do_not(self):
         f = self.forms(self.card(1, self.T), ev(2, self.T + 600, "message.received", to="designer", text="go", **OWNER))["q1"]
@@ -238,7 +238,7 @@ class TextAnswer(unittest.TestCase):
         fs = self.forms(self.card(1, self.T), self.card(2, self.T + 300),
                         ev(3, self.T + 600, "message.received", to="analyst", text="go", **OWNER))
         self.assertIsNone(fs["q1"]["answered"])               # the next card came first: the words answer that one
-        self.assertEqual(fs["q2"]["answer"], "текстом")
+        self.assertEqual(fs["q2"]["answer"], "in words")
         late = self.forms(self.card(1, self.T), ev(2, self.T + 24 * 3600 + 1, "message.received", to="analyst", text="go", **OWNER))
         self.assertIsNone(late["q1"]["answered"])
 
@@ -254,7 +254,7 @@ class TextAnswer(unittest.TestCase):
                            ev(4, self.T + 720, "message.received", to="analyst", text="go", **OWNER)])
         n = m["numbers"]
         self.assertEqual((n["forms"], n["forms_answered"], n["form_answer_median_min"]), (2, 2, 5.5))
-        self.assertIn("form q3 from analyst: Q3? → answered in 10 min: текстом", recap.digest("W", self.T - 1, self.T + 9999, m, ZONE))
+        self.assertIn("form q3 from analyst: Q3? → answered in 10 min: in words", recap.digest("W", self.T - 1, self.T + 9999, m, ZONE))
 
 
 class Flow(unittest.TestCase):
@@ -563,16 +563,16 @@ def task(id_, session, state, created, text, owner=True):
 
 
 class Day(unittest.TestCase):
-    """Дневной рекап: что в работе по всем хабам, Jira и агентам; раз в день, один текст владельцу."""
+    """The daily recap: what is in progress on all hubs, in Jira and with the agents; once a day, one text to the owner."""
     NOW = at(2026, 10, 21, 9, 5)
 
     def test_due_every_day_from_nine_once_and_the_past_is_not_caught_up(self):
         when = recap.DAY_DEFAULT
         self.assertIsNone(recap.day_due(at(2026, 10, 21, 8, 59), ZONE, {}, when))
         self.assertEqual(recap.day_due(at(2026, 10, 21, 9), ZONE, {}, when), "2026-10-21")
-        self.assertEqual(recap.day_due(at(2026, 10, 21, 17), ZONE, {"2026-10-20": {}}, when), "2026-10-21")   # хаб лежал
+        self.assertEqual(recap.day_due(at(2026, 10, 21, 17), ZONE, {"2026-10-20": {}}, when), "2026-10-21")   # the hub was down
         self.assertIsNone(recap.day_due(at(2026, 10, 21, 17), ZONE, {"2026-10-21": {}}, when))
-        self.assertEqual(recap.day_due(at(2026, 10, 18, 9, 1), ZONE, {}, when), "2026-10-18")   # воскресенье тоже
+        self.assertEqual(recap.day_due(at(2026, 10, 18, 9, 1), ZONE, {}, when), "2026-10-18")   # Sunday too
         self.assertIsNone(recap.day_due(at(2026, 10, 21, 17), ZONE, {}, {**when, "on": False}))
 
     def test_the_owner_sets_the_time_or_switches_it_off(self):
@@ -582,9 +582,9 @@ class Day(unittest.TestCase):
         self.assertEqual(recap.day_schedule(feed("day: 08:30 Europe/Berlin")),
                          {"on": True, "hour": 8, "minute": 30, "zone": "Europe/Berlin"})
         self.assertFalse(recap.day_schedule(feed("day: 08:30", "день: выкл"))["on"])
-        self.assertEqual(recap.day_schedule(feed("day: 25:00")), recap.DAY_DEFAULT)         # не время — прежнее
-        self.assertEqual(recap.day_schedule(feed("day: off", by="agent")), recap.DAY_DEFAULT)   # чужой пост — нет
-        self.assertEqual(recap.day_schedule(feed("schedule: mon 09:00")), recap.DAY_DEFAULT)    # это про неделю
+        self.assertEqual(recap.day_schedule(feed("day: 25:00")), recap.DAY_DEFAULT)         # not a time - the previous one
+        self.assertEqual(recap.day_schedule(feed("day: off", by="agent")), recap.DAY_DEFAULT)   # someone else's post - no
+        self.assertEqual(recap.day_schedule(feed("schedule: mon 09:00")), recap.DAY_DEFAULT)    # this one is about the week
 
     def test_other_hubs_snapshot_is_read_but_not_ours(self):
         d = tempfile.mkdtemp()
@@ -592,7 +592,7 @@ class Day(unittest.TestCase):
             os.makedirs(os.path.join(d, host))
             with open(os.path.join(d, host, "open.json"), "w", encoding="utf-8") as f:
                 json.dump(snap(host, 1, [task("d1", "a", "working", 1, "ключ token=" + "z" * 30)]), f)
-        os.makedirs(os.path.join(d, "Old"))   # выгрузки открытого ещё нет
+        os.makedirs(os.path.join(d, "Old"))   # no export of the open work yet
         got = recap.other_open(d, "Mac")
         self.assertEqual(list(got), ["Win"])
         self.assertNotIn("z" * 30, json.dumps(got))
@@ -605,28 +605,28 @@ class Day(unittest.TestCase):
         win = snap("Win", self.NOW - 4 * 86400, [])
         text = recap.day_text("2026-10-21", mine, {"Win": win}, self.NOW, ZONE, {"Win", "Mac.local", "Old"}, "ru")
         lines = text.splitlines()
-        self.assertEqual(lines[0], "")                         # заголовок с датой ставит хаб; текст начинается с пустой строки
+        self.assertEqual(lines[0], "")                         # the hub sets the title with the date; the text starts with an empty line
         self.assertNotIn("Что в работе", text)
         self.assertIn("**⚡ Ждут тебя · 7**", text)
         self.assertIn("**🛠 В работе · 1**", text)
         self.assertIn("**⏳ Без движения · 1**", text)
-        self.assertEqual(text.count("- и ещё 3"), 1)           # DAY_TOP = 4: из семи ждущих — четыре и «и ещё 3»
-        self.assertLess(text.index("правка 8"), text.index("правка 7"))   # дольше висит — выше
+        self.assertEqual(text.count("- и ещё 3"), 1)           # DAY_TOP = 4: of the seven waiting - four and "and 3 more"
+        self.assertLess(text.index("правка 8"), text.index("правка 7"))   # hangs longer - higher
         self.assertNotIn("правка 2", text)
-        self.assertIn("- **ролики трекера**: 5 д, Mac", text)  # хабов два — хаб в конце строки
-        self.assertIn("- **сборка релиза плагина**: ", text)   # жирным — имя до двоеточия
-        self.assertIn("с 19.10, Mac", text)                      # «Без движения» — дата, не «назад»
+        self.assertIn("- **ролики трекера**: 5 д, Mac", text)  # two hubs - the hub at the end of the line
+        self.assertIn("- **сборка релиза плагина**: ", text)   # in bold - the name before the colon
+        self.assertIn("с 19.10, Mac", text)                      # "No movement" - a date, not "ago"
         self.assertIn("**📋 В бэклогах агентов**: 1, у ads", text)
-        self.assertTrue(lines[-1].startswith("*Нет данных: "), lines[-1])   # одной курсивной строкой, последней
+        self.assertTrue(lines[-1].startswith("*Нет данных: "), lines[-1])   # one italic line, the last one
         self.assertIn("хаб Win давно не выгружал, хаб Old ещё не выгружал", lines[-1])
         self.assertNotIn("хаб Mac", text)
-        self.assertEqual(len([x for x in lines if x.startswith("- **")]), 6)   # 4 ждущих + 1 в работе + 1 без движения
+        self.assertEqual(len([x for x in lines if x.startswith("- **")]), 6)   # 4 waiting + 1 in progress + 1 no movement
         for x in lines:
             if x.startswith("- **") and "**: " in x:
-                self.assertLessEqual(len(x.split("**")[1]), 71)   # 70 + «…»
+                self.assertLessEqual(len(x.split("**")[1]), 71)   # 70 + "…"
         self.assertLessEqual(len(lines), 20)
-        self.assertNotRegex(text, r"\bd\d+\b")                # id — не владельцу
-        self.assertNotRegex(text, "🔔")                        # заголовок — у хаба
+        self.assertNotRegex(text, r"\bd\d+\b")                # ids - not for the owner
+        self.assertNotRegex(text, "🔔")                        # the title is the hub's
 
     def test_one_hub_has_no_hub_name_and_an_empty_section_is_left_out(self):
         mine = snap("Mac.local", self.NOW, [task("d1", "gen", "working", self.NOW - 7200, "правки текстов")])
@@ -698,7 +698,7 @@ class DayFlow(unittest.TestCase):
         with open(os.path.join(self.others, "Win", "open.json"), "w", encoding="utf-8") as f:
             json.dump(snap("Win", self.NOW - 600, [task("d1", "ads", "working", self.NOW - 86400, "ролик")]), f)
         self.sent = []
-        self.mine = {"weeks": {"2026-W42": {"notified": 1}}}   # неделю уже слали — тут только день
+        self.mine = {"weeks": {"2026-W42": {"notified": 1}}}   # the week was already sent - only the day here
         self.state = {"sessions": {"analyst": {"state": "idle", "role": "agent"}},
                       "feeds": {"week-recap": [{"by": "owner", "text": "day: 09:00 Europe/Berlin"}]}}
         self.orig = recap.open_now
@@ -721,20 +721,20 @@ class DayFlow(unittest.TestCase):
         self.assertEqual(to_analyst[0][2]["to"], "analyst")
         with open(self.mine["days"]["2026-10-21"]["digest"], encoding="utf-8") as f:
             self.assertIn("Win", f.read())
-        self.tick(self.NOW + 60)   # второй такт: не второй раз, пока ждём
+        self.tick(self.NOW + 60)   # the second tick: not a second time while waiting
         self.assertEqual(len([a for a in self.sent if a[0] == "message.received"]), 1)
         self.assertFalse([a for a in self.sent if a[0] == "owner.notify"])
         day = self.mine["days"]["2026-10-21"]
         with open(day["final"], "w", encoding="utf-8") as f:
             json.dump({"text": "Хабы: всё идёт.\nJira: 2 задачи."}, f)
-        os.utime(day["final"], (self.NOW + 100, self.NOW + 100))   # часы теста, не настоящие
+        os.utime(day["final"], (self.NOW + 100, self.NOW + 100))   # the test's clock, not the real one
         self.tick(self.NOW + 120)
         notes = [a for a in self.sent if a[0] == "owner.notify"]
         self.assertEqual(len(notes), 1)
         self.assertEqual(notes[0][2]["text"], "Хабы: всё идёт.\nJira: 2 задачи.")
         self.assertEqual(notes[0][2]["title"], "In progress · Oct 21")
         self.tick(self.NOW + 3 * 3600)
-        self.assertEqual(len([a for a in self.sent if a[0] == "owner.notify"]), 1)   # один раз за день
+        self.assertEqual(len([a for a in self.sent if a[0] == "owner.notify"]), 1)   # once a day
 
     def test_silent_analyst_the_plugin_text_goes_out(self):
         self.tick(self.NOW)
@@ -757,7 +757,7 @@ class DayFlow(unittest.TestCase):
         self.assertIn("- **ролик**: 1 д, Win", data["text"])
         self.assertTrue(data["text"].endswith("*Нет данных: встречи, календарь, Teams, Jira*"))
         self.assertNotIn("analyst", data["text"])
-        self.assertTrue(data["asked"])   # telegram.brief глушит owner.notify без asked/urgent
+        self.assertTrue(data["asked"])   # telegram.brief silences owner.notify without asked/urgent
 
     def test_no_one_to_review_goes_straight_out(self):
         self.state["sessions"] = {}
@@ -766,7 +766,7 @@ class DayFlow(unittest.TestCase):
         self.assertNotIn("analyst", self.sent[0][2]["text"])
 
     def test_old_answer_is_not_todays(self):
-        """recap.json вчерашнего дня лежит в папке другого дня — но и тот же день: файл старше отправки не принимаем."""
+        """Yesterday's recap.json lies in another day's folder - but also for the same day: a file older than the send is not taken."""
         self.tick(self.NOW)
         day = self.mine["days"]["2026-10-21"]
         with open(day["final"], "w", encoding="utf-8") as f:
