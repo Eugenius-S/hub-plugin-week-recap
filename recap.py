@@ -69,15 +69,46 @@ def sync_dir():
     return os.path.dirname(path) if path else None
 
 
+HIDDEN = "[секрет скрыт]"   # what hub-sync's redact puts in place of a secret: the digest reads the same with or without it
+# `token=...`, `password: ...` - hub-sync's redact catches these too, the core's mask only knows the forms of keys
+SECRET_PAIR = re.compile(r"(?:api[_-]?key|token|secret|password)[\"']?\s*[:=]\s*[\"']?[^\s\"']{12,}", re.I)
+
+
+def _core_mask():
+    """The core's own secrets mask (core/redact.py `mask`, the one the journal is written through) or None - a core
+    without it."""
+    try:
+        from core import redact as core_redact
+        return core_redact.mask if callable(getattr(core_redact, "mask", None)) else None
+    except ImportError:
+        return None
+
+
+def _core_redact(mask):
+    """hub-sync's redact without hub-sync: the core's key forms plus `name=value` pairs, every secret - HIDDEN."""
+    mark = getattr(sys.modules.get(getattr(mask, "__module__", "")), "MASK", None)
+
+    def redact(text):
+        out = SECRET_PAIR.sub(HIDDEN, mask(str(text or "")))
+        return out.replace(mark, HIDDEN) if mark else out
+    return redact
+
+
 def _sync():
-    """hub-sync/sync.py as a module; not found - SyncMissing with what to do (not at import: the plugin must start)."""
+    """hub-sync/sync.py as a module; without hub-sync (a hub that does not run the exchange) - the core's secrets mask
+    stands for its redact and there is no open work of the exchange; neither - SyncMissing with what to do (not at
+    import: the plugin must start)."""
     global _SYNC
     if _SYNC is None:
         path = find_sync(_core_root(), os.environ, _hub_config())
         if not path:
+            mask = _core_mask()
+            if mask:
+                _SYNC = type("CoreRedact", (), {"redact": staticmethod(_core_redact(mask))})
+                return _SYNC
             raise SyncMissing("hub-sync/sync.py not found (looked in the core's repo, $HUB_SYNC_DIR and the sync.py of "
-                              f"hub.json extensions.{HUB_SYNC_ENTRY}.run): without its redact nothing is sent; "
-                              "set HUB_SYNC_DIR to the hub-sync folder")
+                              f"hub.json extensions.{HUB_SYNC_ENTRY}.run) and the core has no secrets mask "
+                              "(core/redact.py): without a redact nothing is sent; set HUB_SYNC_DIR to the hub-sync folder")
         spec = importlib.util.spec_from_file_location("hub_sync_for_recap", path)
         mod = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(mod)

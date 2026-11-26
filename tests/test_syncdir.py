@@ -89,8 +89,27 @@ class Redaction(unittest.TestCase):
         with mock.patch.object(recap, "find_sync", return_value=self.sync):
             self.assertEqual(recap.clean({"a": ["xSECRETx"]}), {"a": ["x***x"]})
 
+    def test_without_hub_sync_the_core_mask_redacts(self):
+        # a clean hub (no hub-sync anywhere): the core's own secrets mask guards the digests, the plugin works
+        with mock.patch.object(recap, "find_sync", return_value=None), \
+                mock.patch.object(recap, "_core_mask", return_value=lambda s: s.replace("SECRET", "[masked]")):
+            self.assertEqual(recap.clean({"a": ["xSECRETx"]}), {"a": ["x[masked]x"]})
+            self.assertEqual(recap.clean("key token=" + "z" * 30), "key [секрет скрыт]")   # pairs, as hub-sync's redact
+            self.assertIsNone(recap.open_now({}, 0, "x"))   # open work of the exchange: only hub-sync has it
+
+    def test_without_hub_sync_the_real_core_mask_reads_as_hub_sync(self):
+        from core import redact as core_redact   # the tests run with the core on the path, as the plugin does
+        with mock.patch.object(recap, "find_sync", return_value=None), \
+                mock.patch.object(recap, "_core_mask", return_value=core_redact.mask):
+            self.assertEqual(recap.clean("key sk-ant-api03-" + "q" * 30), "key [секрет скрыт]")
+
+    def test_hub_sync_goes_before_the_core_mask(self):
+        with mock.patch.object(recap, "find_sync", return_value=self.sync), \
+                mock.patch.object(recap, "_core_mask", return_value=lambda s: "core"):
+            self.assertEqual(recap.clean("xSECRETx"), "x***x")
+
     def test_not_found_is_a_clear_error_and_nothing_passes(self):
-        with mock.patch.object(recap, "find_sync", return_value=None):
+        with mock.patch.object(recap, "find_sync", return_value=None), mock.patch.object(recap, "_core_mask", return_value=None):
             with self.assertRaises(recap.SyncMissing) as cm:
                 recap.clean("token SECRET")
         self.assertIn("HUB_SYNC_DIR", str(cm.exception))
@@ -98,7 +117,8 @@ class Redaction(unittest.TestCase):
 
     def test_open_now_without_sync_is_empty_and_logged(self):
         err = io.StringIO()
-        with mock.patch.object(recap, "find_sync", return_value=None), contextlib.redirect_stderr(err):
+        with mock.patch.object(recap, "find_sync", return_value=None), mock.patch.object(recap, "_core_mask", return_value=None), \
+                contextlib.redirect_stderr(err):
             self.assertIsNone(recap.open_now({}, 0, "x"))
         self.assertIn("HUB_SYNC_DIR", err.getvalue())
 
